@@ -1,11 +1,11 @@
 // Main Application Orchestrator for PC Monitor GitHub Pages Client
 
 import { ServerStore } from './storage.js';
-import { MonitorClient } from './client.js?v=9';
+import { MonitorClient } from './client.js?v=10';
 import { SparklineChart } from './charts.js';
-import { UI } from './ui.js?v=9';
+import { UI } from './ui.js?v=10';
 import { QRScanner } from './qr-scanner.js';
-import { Layout, Deck } from './panel.js?v=9';
+import { Layout, Deck } from './panel.js?v=10';
 
 class App {
   constructor() {
@@ -86,6 +86,13 @@ class App {
     document.getElementById('pin-form')?.addEventListener('submit', (e) => {
       e.preventDefault();
       this.submitPIN();
+    });
+    // Connect as soon as 4 digits are typed or pasted (no button press needed).
+    document.getElementById('input-pin')?.addEventListener('input', (e) => {
+      const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+      if (digits !== e.target.value) e.target.value = digits;
+      document.getElementById('pin-error')?.classList.add('hidden');
+      if (digits.length === 4) this.submitPIN();
     });
 
     // Power actions
@@ -214,12 +221,16 @@ class App {
     const errEl = document.getElementById('pin-error');
     const btn = document.getElementById('btn-pin-submit');
     const pin = (input?.value || '').trim();
+    if (this.pinSubmitting) return; // auto-submit and Enter can race
     if (!server || !/^\d{4}$/.test(pin)) {
       errEl.textContent = 'Enter the 4-digit PIN.';
       errEl.classList.remove('hidden');
       return;
     }
+    this.pinSubmitting = true;
     btn.disabled = true;
+    btn.textContent = 'Connecting…';
+    input.readOnly = true;
     try {
       server.session = await MonitorClient.pair(server, pin);
       server.controlEnabled = true;
@@ -233,9 +244,13 @@ class App {
         ? 'Incorrect PIN. After 5 wrong attempts the server shows a new PIN.'
         : `Could not pair: ${e.message}`;
       errEl.classList.remove('hidden');
-      input?.select();
+      input.readOnly = false;
+      input.select(); // typing the next attempt replaces the wrong PIN
     } finally {
+      this.pinSubmitting = false;
+      input.readOnly = false;
       btn.disabled = false;
+      btn.textContent = 'Connect';
     }
   }
 
