@@ -101,7 +101,7 @@ No new third-party Go dependencies were added for audio/SMART/devices: Windows u
 | `v1.1.0` | QR encoder fixed (Reed-Solomon ECC, v1–40), dashboard render crash fixed, real Windows network counters, real per-core CPU / uptime / process stats / ACPI thermal zone, fake temperatures removed |
 | `v1.2.0` | Liquid Glass UI; **PIN-gated remote control** (audio, shutdown/restart), `-read-only`; drive health/SMART; connected devices; disk I/O, adapter rates/link speed, GPU fan/clocks/power limit, battery, users; HTML escaping of host-provided names |
 | `v1.2.1` | **Pairing persists across restarts** (token + session hashes in `~/.pc_monitor`), `-reset-pairing`, single pairing QR code |
-| *(unreleased)* | Control Panel with Stream Deck-style buttons (`pkg/deck`, `/api/deck/*`), Customize dialog to show/hide sections |
+| `v1.3.0` | Control Panel with Stream Deck-style buttons (`pkg/deck`, `/api/deck/*`), Customize dialog to show/hide sections |
 
 All released tags have 7 release assets.
 

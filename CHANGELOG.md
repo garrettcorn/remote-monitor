@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-11-19
+
+### Changed
+- Move audio controls and restart/shut down into a new Control Panel section ([`aeaff72`](https://github.com/garrettcorn/remote-monitor/commit/aeaff72))
+
+### Added
+- Add Stream Deck-style buttons for media and volume keys, mic mute, lock screen, keyboard shortcuts, opening web pages and launching apps ([`aeaff72`](https://github.com/garrettcorn/remote-monitor/commit/aeaff72))
+- Add a button editor to add, edit, delete and reorder buttons with custom labels and colours ([`aeaff72`](https://github.com/garrettcorn/remote-monitor/commit/aeaff72))
+- Add `~/.pc_monitor/actions.json` allowlist of apps that buttons may launch ([`aeaff72`](https://github.com/garrettcorn/remote-monitor/commit/aeaff72))
+- Add a Customize dialog to show or hide dashboard sections ([`aeaff72`](https://github.com/garrettcorn/remote-monitor/commit/aeaff72))
+
 ## [1.2.1] - 2026-11-19
 
 ### Changed
@@ -77,6 +88,8 @@ All notable changes to this project will be documented in this file.
 - Add multi-server fleet management supporting simultaneous monitoring and live server switching in localStorage (#1)
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
+
+[1.3.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.3.0
 
 [1.2.1]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.2.1
 
