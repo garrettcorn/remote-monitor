@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-11-19
+
+### Changed
+- Save the pairing token and paired PIN sessions in `~/.pc_monitor` so dashboards reconnect after a server restart ([`07601f7`](https://github.com/garrettcorn/remote-monitor/commit/07601f7))
+- Show a "pairing revoked" status in the dashboard instead of retrying a rejected pairing token ([`07601f7`](https://github.com/garrettcorn/remote-monitor/commit/07601f7))
+
+### Added
+- Add `-reset-pairing` flag to revoke all paired dashboards ([`07601f7`](https://github.com/garrettcorn/remote-monitor/commit/07601f7))
+
+### Removed
+- Remove the second terminal QR code for the direct LAN URL ([`07601f7`](https://github.com/garrettcorn/remote-monitor/commit/07601f7))
+
+### Fixed
+- Fix paired dashboards requiring unpairing and a new PIN after every server restart ([`07601f7`](https://github.com/garrettcorn/remote-monitor/commit/07601f7))
+
 ## [1.2.0] - 2026-11-19
 
 ### Changed
@@ -62,6 +77,8 @@ All notable changes to this project will be documented in this file.
 - Add multi-server fleet management supporting simultaneous monitoring and live server switching in localStorage (#1)
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
+
+[1.2.1]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.2.1
 
 [1.2.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.2.0
 
