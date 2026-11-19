@@ -8,7 +8,7 @@
   <meta name="color-scheme" content="dark light">
   <title>PC Monitor — System Telemetry & Multi-Server Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 
@@ -117,6 +117,8 @@
                 <div class="audio-label">Power</div>
               </div>
               <div class="power-row">
+                <button id="btn-lock" class="btn btn-outline" title="Lock this computer">Lock</button>
+                <button id="btn-sleep" class="btn btn-outline" title="Put this computer to sleep">Sleep</button>
                 <button id="btn-restart" class="btn btn-outline" title="Restart this computer">Restart</button>
                 <button id="btn-shutdown" class="btn btn-outline btn-danger-outline" title="Shut down this computer">Shut down</button>
               </div>
@@ -439,56 +441,55 @@
 
   <!-- ================= STREAM DECK BUTTON EDITOR ================= -->
   <div id="deck-modal" class="modal-overlay hidden">
-    <div class="modal-card">
+    <div class="modal-card deck-editor">
       <div class="modal-header">
         <div id="deck-modal-title" class="modal-title">Add button</div>
         <button class="modal-close-btn" aria-label="Close">&times;</button>
       </div>
       <form id="deck-form" autocomplete="off">
-        <div class="form-group">
-          <label class="form-label" for="deck-type">Action</label>
-          <div class="server-selector-box">
-            <select id="deck-type" class="server-select">
-              <option value="media">Media &amp; volume key</option>
-              <option value="mic_mute">Toggle microphone mute</option>
-              <option value="lock">Lock screen</option>
-              <option value="hotkey">Keyboard shortcut</option>
-              <option value="url">Open web page</option>
-              <option value="launch">Launch app</option>
-            </select>
-          </div>
+        <!-- Category tiles -->
+        <div id="deck-cats" class="deck-cats" role="tablist" aria-label="Button type">
+          <button type="button" class="deck-cat" data-cat="app" role="tab">App</button>
+          <button type="button" class="deck-cat" data-cat="shortcut" role="tab">Shortcut</button>
+          <button type="button" class="deck-cat" data-cat="media" role="tab">Media &amp; system</button>
+          <button type="button" class="deck-cat" data-cat="text" role="tab">Text</button>
+          <button type="button" class="deck-cat" data-cat="url" role="tab">Website</button>
         </div>
-        <div class="form-group deck-field" data-for="media">
-          <label class="form-label" for="deck-media">Key</label>
-          <div class="server-selector-box">
-            <select id="deck-media" class="server-select">
-              <option value="play_pause">Play / Pause</option>
-              <option value="next">Next track</option>
-              <option value="previous">Previous track</option>
-              <option value="stop">Stop</option>
-              <option value="volume_up">Volume up</option>
-              <option value="volume_down">Volume down</option>
-              <option value="volume_mute">Mute speakers</option>
-            </select>
-          </div>
+
+        <!-- App: installed apps on the host -->
+        <div class="deck-pane" data-pane="app">
+          <input id="deck-app-search" class="form-input" type="search" placeholder="Search installed apps…" aria-label="Search installed apps">
+          <div id="deck-app-list" class="pick-list" role="listbox" aria-label="Installed apps"></div>
+          <span id="deck-app-help" class="sub-text"></span>
         </div>
-        <div class="form-group deck-field" data-for="hotkey">
-          <label class="form-label" for="deck-keys">Shortcut</label>
-          <input id="deck-keys" class="form-input" type="text" placeholder="Click, then press keys (e.g. Ctrl+Shift+M)" readonly>
-          <span class="sub-text">Press the key combination here. It is sent to the active window on the host.</span>
+
+        <!-- Shortcut: preset library + recorder -->
+        <div class="deck-pane" data-pane="shortcut">
+          <input id="deck-shortcut-search" class="form-input" type="search" placeholder="Search shortcuts (copy, mute, screenshot…)" aria-label="Search shortcuts">
+          <div id="deck-shortcut-list" class="pick-list" role="listbox" aria-label="Common shortcuts"></div>
+          <label class="form-label" for="deck-keys" style="margin-top: 12px;">Or record your own</label>
+          <input id="deck-keys" class="form-input" type="text" placeholder="Click here, then press the keys (e.g. Ctrl+Shift+M)" readonly>
+          <span class="sub-text">Sent to the active window on the host.</span>
         </div>
-        <div class="form-group deck-field" data-for="url">
-          <label class="form-label" for="deck-url">Web address</label>
-          <input id="deck-url" class="form-input" type="url" placeholder="https://example.com">
+
+        <!-- Media & system -->
+        <div class="deck-pane" data-pane="media">
+          <div id="deck-media-list" class="chip-grid" role="listbox" aria-label="Media and system actions"></div>
         </div>
-        <div class="form-group deck-field" data-for="launch">
-          <label class="form-label" for="deck-launch">App</label>
-          <div class="server-selector-box">
-            <select id="deck-launch" class="server-select"></select>
-          </div>
-          <span id="deck-launch-help" class="sub-text"></span>
+
+        <!-- Text snippet -->
+        <div class="deck-pane" data-pane="text">
+          <textarea id="deck-text" class="form-input" rows="4" maxlength="1000" placeholder="Text to type, e.g. an email address or a canned reply"></textarea>
+          <span class="sub-text"><span id="deck-text-count">0</span>/1000 · typed into the active window on the host</span>
         </div>
-        <div class="form-group">
+
+        <!-- Website -->
+        <div class="deck-pane" data-pane="url">
+          <input id="deck-url" class="form-input" type="url" placeholder="https://example.com" aria-label="Web address">
+          <span class="sub-text">Opens in the host's default browser.</span>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
           <label class="form-label" for="deck-label">Label</label>
           <input id="deck-label" class="form-input" type="text" maxlength="18" placeholder="Shown on the button">
         </div>
@@ -531,6 +532,6 @@
   </div>
 
   <!-- Main JavaScript App -->
-  <script type="module" src="js/app.js?v=13"></script>
+  <script type="module" src="js/app.js?v=16"></script>
 </body>
 </html>

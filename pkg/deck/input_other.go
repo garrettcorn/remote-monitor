@@ -11,3 +11,7 @@ func pressHotkey(Hotkey) error  { return errUnsupported }
 func lockScreen() error         { return errUnsupported }
 func openURL(string) error      { return errUnsupported }
 func launch(LaunchAction) error { return errUnsupported }
+
+func listApps() ([]App, error) { return nil, nil }
+func launchApp(App) error      { return errUnsupported }
+func typeText(string) error    { return errUnsupported }

@@ -102,3 +102,41 @@ func TestKeyboardInputSize(t *testing.T) {
 		t.Fatalf("INPUT layout is %d bytes, want 40", s)
 	}
 }
+
+func TestValidateText(t *testing.T) {
+	for _, ok := range []string{"hello", "Line 1\nLine 2\tTabbed", "Ünïcödé ✓ 日本語 🎮"} {
+		if err := validateText(ok); err != nil {
+			t.Errorf("validateText(%q) = %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "bell\a", "esc\x1b[31m", "del\x7f", strings.Repeat("a", MaxTextLen+1), "\xff\xfe"} {
+		if err := validateText(bad); err == nil {
+			t.Errorf("validateText(%q) should fail", bad)
+		}
+	}
+	// Press rejects bad text before touching the keyboard.
+	if err := Press(Action{Type: "text", Text: "x\x1b"}, ""); err == nil {
+		t.Error("Press accepted control characters")
+	}
+}
+
+func TestAppLaunchRejectsUnknownIDs(t *testing.T) {
+	for _, id := range []string{"", `C:\Windows\System32\cmd.exe`, "/bin/sh", "definitely-not-an-installed-app-id"} {
+		if err := Press(Action{Type: "app", ID: id}, ""); err == nil {
+			t.Errorf("Press(app %q) should fail", id)
+		}
+	}
+}
+
+func TestListAppsFiltersNoise(t *testing.T) {
+	apps, err := ListApps()
+	if err != nil {
+		t.Skipf("app discovery unavailable: %v", err)
+	}
+	for _, a := range apps {
+		if a.ID == "" || a.Name == "" || appNoise.MatchString(a.Name) {
+			t.Errorf("unexpected entry %+v", a)
+		}
+	}
+	t.Logf("discovered %d apps", len(apps))
+}

@@ -1,11 +1,11 @@
 // Main Application Orchestrator for PC Monitor GitHub Pages Client
 
 import { ServerStore } from './storage.js';
-import { MonitorClient } from './client.js?v=13';
+import { MonitorClient } from './client.js?v=16';
 import { SparklineChart } from './charts.js';
-import { UI } from './ui.js?v=13';
+import { UI } from './ui.js?v=16';
 import { QRScanner } from './qr-scanner.js';
-import { Layout, Deck, Screens } from './panel.js?v=13';
+import { Layout, Deck, Screens } from './panel.js?v=16';
 
 class App {
   constructor() {
@@ -97,6 +97,16 @@ class App {
     });
 
     // Power actions
+    document.getElementById('btn-lock')?.addEventListener('click', async () => {
+      if (!this.activeServer) return;
+      try {
+        await MonitorClient.post(this.activeServer, '/api/deck/press', { type: 'lock' });
+        this.showToast(`Locked ${this.activeServer.name}`);
+      } catch (e) {
+        this.handleControlError(this.activeServer, e);
+      }
+    });
+    document.getElementById('btn-sleep')?.addEventListener('click', () => this.powerAction('sleep'));
     document.getElementById('btn-restart')?.addEventListener('click', () => this.powerAction('restart'));
     document.getElementById('btn-shutdown')?.addEventListener('click', () => this.powerAction('shutdown'));
 
@@ -176,8 +186,13 @@ class App {
   async powerAction(action) {
     const server = this.activeServer;
     if (!server) return;
-    const verb = action === 'restart' ? 'Restart' : 'Shut down';
-    if (!confirm(`${verb} "${server.name}"?\n\nThe computer will ${action === 'restart' ? 'restart' : 'shut down'} in about 5 seconds. Unsaved work on it may be lost.`)) {
+    const verbs = {
+      restart: ['Restart', 'restart in about 5 seconds. Unsaved work on it may be lost.'],
+      shutdown: ['Shut down', 'shut down in about 5 seconds. Unsaved work on it may be lost.'],
+      sleep: ['Sleep', 'go to sleep in about 2 seconds. This dashboard will lose its connection until it wakes.'],
+    };
+    const [verb, detail] = verbs[action] || verbs.shutdown;
+    if (!confirm(`${verb} "${server.name}"?\n\nThe computer will ${detail}`)) {
       return;
     }
     try {
@@ -367,6 +382,7 @@ class App {
         UI.renderSnapshot(snapshot, this.charts);
         this.renderAudio(snapshot.audio);
         this.screens.update(snapshot.displays);
+        this.deck.setLiveState(snapshot);
       },
       (status, message) => {
         this.updateConnectionStatus(status, message);

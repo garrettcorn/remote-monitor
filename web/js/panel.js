@@ -1,8 +1,8 @@
 // Dashboard customization (show/hide sections) and the Stream Deck-style
 // button grid in the Control Panel.
 
-import { UI } from './ui.js?v=13';
-import { MonitorClient } from './client.js?v=13';
+import { UI } from './ui.js?v=16';
+import { MonitorClient } from './client.js?v=16';
 
 const esc = UI.esc;
 
@@ -115,12 +115,21 @@ export const Layout = {
   },
 };
 
-// ------------------------------------------------------------- stream deck
+// ------------------------------------------------------------ deck buttons
 
 export const DECK_COLORS = {
   blue: 'var(--blue)', purple: 'var(--purple)', green: 'var(--green)',
   orange: 'var(--orange)', red: 'var(--red)', gray: 'var(--text-muted)',
 };
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+// CSS value for a button colour: a preset name or a custom "#rrggbb".
+// Anything else falls back to blue, so stored values can't inject CSS.
+function colorCss(c) {
+  if (DECK_COLORS[c]) return DECK_COLORS[c];
+  return HEX_COLOR.test(c || '') ? c : DECK_COLORS.blue;
+}
 
 const ICON = {
   play_pause: '<path d="M5 4l7 6-7 6zM13 4h2v12h-2z"/>',
@@ -135,13 +144,59 @@ const ICON = {
   hotkey: '<rect x="2.5" y="5" width="15" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 8h1M9.5 8h1M13.5 8h1M6.5 12h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
   url: '<circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 10h14M10 3c2.5 2.6 2.5 11.4 0 14M10 3c-2.5 2.6-2.5 11.4 0 14" fill="none" stroke="currentColor" stroke-width="1.4"/>',
   launch: '<rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><rect x="11" y="11" width="6" height="6" rx="1.5"/>',
+  text: '<path d="M3 15l3.5-10h1L11 15M4.3 11.5h5.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 9.5c.6-.7 1.4-1 2.3-1 1.3 0 2.2.8 2.2 2V15m0-2.6c-.6.9-1.5 1.4-2.5 1.4-1.1 0-1.9-.6-1.9-1.5 0-1.1 1.1-1.6 4.4-1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
   add: '<path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
 };
 
-const MEDIA_LABELS = {
-  play_pause: 'Play / Pause', next: 'Next', previous: 'Previous', stop: 'Stop',
-  volume_up: 'Volume +', volume_down: 'Volume −', volume_mute: 'Mute',
-};
+// Media & system choices (one tap each).
+const MEDIA_CHOICES = [
+  { type: 'media', key: 'play_pause', label: 'Play / Pause' },
+  { type: 'media', key: 'previous', label: 'Previous' },
+  { type: 'media', key: 'next', label: 'Next' },
+  { type: 'media', key: 'stop', label: 'Stop' },
+  { type: 'media', key: 'volume_down', label: 'Volume −' },
+  { type: 'media', key: 'volume_up', label: 'Volume +' },
+  { type: 'media', key: 'volume_mute', label: 'Mute speakers' },
+  { type: 'mic_mute', label: 'Mic mute' },
+  { type: 'lock', label: 'Lock screen' },
+];
+
+// Common shortcuts. Items are [label, keys, macKeys?]. `os` limits a group
+// to one host OS; `cmd` groups use Cmd instead of Ctrl on macOS hosts.
+const SHORTCUTS = [
+  { group: 'Windows', os: 'windows', items: [
+    ['Show desktop', 'win+d'], ['Task Manager', 'ctrl+shift+esc'], ['Screenshot (Snipping Tool)', 'win+shift+s'],
+    ['File Explorer', 'win+e'], ['Settings', 'win+i'], ['Run dialog', 'win+r'], ['Clipboard history', 'win+v'],
+    ['Minimize all windows', 'win+m'], ['Snap window left', 'win+left'], ['Snap window right', 'win+right'],
+    ['Maximize window', 'win+up'], ['Task view', 'win+tab'], ['Next virtual desktop', 'ctrl+win+right'],
+    ['Previous virtual desktop', 'ctrl+win+left'], ['Switch app', 'alt+tab'], ['Close window', 'alt+f4'],
+    ['Display / projection mode', 'win+p'],
+  ] },
+  { group: 'Xbox Game Bar', os: 'windows', items: [
+    ['Open Game Bar', 'win+g'], ['Record last 30 seconds', 'win+alt+g'], ['Start / stop recording', 'win+alt+r'],
+    ['Game screenshot', 'win+alt+printscreen'], ['Game Bar mic on/off', 'win+alt+m'],
+  ] },
+  { group: 'macOS', os: 'darwin', items: [
+    ['Spotlight', 'win+space'], ['Mission Control', 'ctrl+up'], ['Screenshot area', 'win+shift+4'],
+    ['Screenshot options', 'win+shift+5'], ['Force Quit', 'win+alt+esc'], ['Switch app', 'win+tab'],
+    ['Hide app', 'win+h'], ['Quit app', 'win+q'],
+  ] },
+  { group: 'Editing', cmd: true, items: [
+    ['Copy', 'ctrl+c'], ['Paste', 'ctrl+v'], ['Cut', 'ctrl+x'], ['Undo', 'ctrl+z'], ['Redo', 'ctrl+y', 'win+shift+z'],
+    ['Select all', 'ctrl+a'], ['Save', 'ctrl+s'], ['Find', 'ctrl+f'], ['Print', 'ctrl+p'],
+  ] },
+  { group: 'Browser', cmd: true, items: [
+    ['New tab', 'ctrl+t'], ['Close tab', 'ctrl+w'], ['Reopen closed tab', 'ctrl+shift+t'], ['Next tab', 'ctrl+tab', 'ctrl+tab'],
+    ['Previous tab', 'ctrl+shift+tab', 'ctrl+shift+tab'], ['Reload page', 'f5', 'win+r'], ['Full screen', 'f11', 'ctrl+win+f'],
+    ['Address bar', 'ctrl+l'], ['Reset zoom', 'ctrl+0'],
+  ] },
+  { group: 'Calls & chat', items: [
+    ['Discord: toggle mute', 'ctrl+shift+m', 'win+shift+m'], ['Discord: toggle deafen', 'ctrl+shift+d', 'win+shift+d'],
+    ['Teams: toggle mute', 'ctrl+shift+m', 'win+shift+m'], ['Teams: toggle camera', 'ctrl+shift+o', 'win+shift+o'],
+    ['Zoom: toggle mute', 'alt+a', 'win+shift+a'], ['Zoom: toggle video', 'alt+v', 'win+shift+v'],
+    ['Google Meet: toggle mic', 'ctrl+d', 'win+d'], ['Google Meet: toggle camera', 'ctrl+e', 'win+e'],
+  ] },
+];
 
 const DEFAULT_BUTTONS = [
   { type: 'media', key: 'play_pause', label: 'Play / Pause', color: 'blue' },
@@ -154,15 +209,15 @@ const DEFAULT_BUTTONS = [
   { type: 'lock', label: 'Lock', color: 'gray' },
 ];
 
+const CATEGORY_OF = { app: 'app', launch: 'app', hotkey: 'shortcut', media: 'media', mic_mute: 'media', lock: 'media', text: 'text', url: 'url' };
+
 function iconFor(btn) {
+  if (btn.type === 'app' || btn.type === 'launch') {
+    const ch = (btn.appName || btn.label || '?').trim().charAt(0).toUpperCase();
+    return `<span class="deck-initial">${esc(ch)}</span>`;
+  }
   const k = btn.type === 'media' ? btn.key : btn.type;
   return `<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">${ICON[k] || ICON.hotkey}</svg>`;
-}
-
-function subtitle(btn) {
-  if (btn.type === 'hotkey') return btn.keys || '';
-  if (btn.type === 'url') { try { return new URL(btn.url).host; } catch (e) { return ''; } }
-  return '';
 }
 
 // Map a KeyboardEvent to our shortcut syntax ("ctrl+shift+m").
@@ -186,7 +241,29 @@ function shortcutFromEvent(e) {
   return { mods, key };
 }
 
-const pretty = (s) => s.split('+').map(p => p.length <= 1 ? p.toUpperCase() : p[0].toUpperCase() + p.slice(1)).join('+');
+// Human-readable shortcut for the host OS ("Ctrl+Shift+M", "Cmd+Shift+M").
+function prettyKeys(s, os) {
+  const names = os === 'darwin'
+    ? { win: 'Cmd', alt: 'Option', ctrl: 'Ctrl' }
+    : { win: 'Win', alt: 'Alt', ctrl: 'Ctrl' };
+  const special = { esc: 'Esc', pageup: 'PgUp', pagedown: 'PgDn', printscreen: 'PrtSc', left: '←', right: '→', up: '↑', down: '↓' };
+  return s.split('+').map(p => names[p] || special[p] || (p.length <= 1 ? p.toUpperCase() : p[0].toUpperCase() + p.slice(1))).join('+');
+}
+
+function shortcutsFor(os) {
+  const out = [];
+  for (const g of SHORTCUTS) {
+    if (g.os && g.os !== os) continue;
+    out.push({
+      group: g.group,
+      items: g.items.map(([label, keys, mac]) => ({
+        label,
+        keys: os === 'darwin' ? (mac || (g.cmd ? keys.replace(/\bctrl\b/, 'win') : keys)) : keys,
+      })),
+    });
+  }
+  return out;
+}
 
 export class Deck {
   constructor(app) {
@@ -195,15 +272,24 @@ export class Deck {
     this.buttons = [];
     this.editing = false;
     this.editIndex = -1;
-    this.launchList = null;
+    this.hostOS = 'windows';
+    this.live = { speakerMuted: false, micMuted: false };
+    this.apps = null;       // installed apps on the server (cached per server)
+    this.launchList = null; // custom apps from actions.json
     this.dragFrom = -1;
+    this.draft = null;      // button being edited
+    this.cat = 'app';
+    this.labelTouched = false;
     this.bind();
   }
 
   storageKey() { return 'pc_monitor_deck_' + (this.server?.id || 'none'); }
 
   setServer(server) {
-    if (this.server?.id !== server?.id) this.launchList = null;
+    if (this.server?.id !== server?.id) {
+      this.apps = null;
+      this.launchList = null;
+    }
     this.server = server;
     this.buttons = load(this.storageKey(), null) || DEFAULT_BUTTONS.map(b => ({ ...b }));
     this.editing = false;
@@ -211,6 +297,26 @@ export class Deck {
   }
 
   persist() { save(this.storageKey(), this.buttons); }
+
+  // Light up mute / mic-mute buttons from the live audio state.
+  setLiveState(snap) {
+    if (snap?.host?.os) this.hostOS = snap.host.os;
+    const out = snap?.audio?.outputs?.find(d => d.default);
+    const inp = snap?.audio?.inputs?.find(d => d.default);
+    const next = { speakerMuted: !!out?.muted, micMuted: !!inp?.muted };
+    if (next.speakerMuted !== this.live.speakerMuted || next.micMuted !== this.live.micMuted) {
+      this.live = next;
+      this.applyLiveState();
+    }
+  }
+
+  applyLiveState() {
+    document.querySelectorAll('#deck-grid .deck-btn[data-live]').forEach((b) => {
+      const on = b.dataset.live === 'speaker' ? this.live.speakerMuted : this.live.micMuted;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
 
   render() {
     const grid = document.getElementById('deck-grid');
@@ -221,13 +327,19 @@ export class Deck {
       editBtn.setAttribute('aria-pressed', String(this.editing));
     }
     grid.classList.toggle('is-editing', this.editing);
-    let html = this.buttons.map((b, i) => `
-      <button class="deck-btn" data-index="${i}" style="--accent: ${DECK_COLORS[b.color] || DECK_COLORS.blue}"
-              ${this.editing ? 'draggable="true"' : ''} title="${esc(b.label)}${subtitle(b) ? ' · ' + esc(subtitle(b)) : ''}">
+    let html = this.buttons.map((b, i) => {
+      const live = b.type === 'mic_mute' ? 'mic' : (b.type === 'media' && b.key === 'volume_mute' ? 'speaker' : '');
+      const hint = b.type === 'hotkey' ? ` · ${prettyKeys(b.keys || '', this.hostOS)}`
+        : b.type === 'url' ? ` · ${(() => { try { return new URL(b.url).host; } catch (e) { return ''; } })()}`
+        : (b.type === 'app' || b.type === 'launch') && b.appName && b.appName !== b.label ? ` · ${b.appName}` : '';
+      return `
+      <button class="deck-btn" data-index="${i}" ${live ? `data-live="${live}"` : ''} style="--accent: ${colorCss(b.color)}"
+              ${this.editing ? 'draggable="true"' : ''} title="${esc(b.label + hint)}">
         <span class="deck-icon">${iconFor(b)}</span>
         <span class="deck-label">${esc(b.label)}</span>
         ${this.editing ? '<span class="deck-edit-badge" aria-hidden="true">Edit</span>' : ''}
-      </button>`).join('');
+      </button>`;
+    }).join('');
     if (this.editing) {
       html += `<button class="deck-btn deck-add" data-add="1"><span class="deck-icon"><svg viewBox="0 0 20 20" aria-hidden="true">${ICON.add}</svg></span><span class="deck-label">Add</span></button>`;
     }
@@ -235,6 +347,7 @@ export class Deck {
       html = '<div class="sub-text">No buttons yet. Click Edit to add some.</div>';
     }
     grid.innerHTML = html;
+    this.applyLiveState();
   }
 
   bind() {
@@ -277,28 +390,79 @@ export class Deck {
     });
     grid?.addEventListener('dragend', () => { this.dragFrom = -1; this.render(); });
 
-    // Editor form.
-    document.getElementById('deck-type')?.addEventListener('change', () => this.syncFields(true));
-    document.getElementById('deck-media')?.addEventListener('change', () => this.autoLabel());
-    document.getElementById('deck-launch')?.addEventListener('change', () => this.autoLabel());
+    // ---- editor
+    document.getElementById('deck-cats')?.addEventListener('click', (e) => {
+      const tile = e.target.closest('.deck-cat');
+      if (tile) this.showCategory(tile.dataset.cat);
+    });
+
+    document.getElementById('deck-app-search')?.addEventListener('input', () => this.renderApps());
+    document.getElementById('deck-app-list')?.addEventListener('click', (e) => {
+      const item = e.target.closest('.pick-item');
+      if (!item) return;
+      this.choose({ type: item.dataset.type, id: item.dataset.id, appName: item.dataset.name }, item.dataset.name);
+      this.renderApps();
+    });
+
+    document.getElementById('deck-shortcut-search')?.addEventListener('input', () => this.renderShortcuts());
+    document.getElementById('deck-shortcut-list')?.addEventListener('click', (e) => {
+      const item = e.target.closest('.pick-item');
+      if (!item) return;
+      this.choose({ type: 'hotkey', keys: item.dataset.keys }, item.dataset.label);
+      this.showRecorded();
+      this.renderShortcuts();
+    });
+
     const keys = document.getElementById('deck-keys');
     keys?.addEventListener('keydown', (e) => {
       e.preventDefault();
       const { mods, key } = shortcutFromEvent(e);
       if (!key) {
-        keys.value = mods.length ? pretty(mods.join('+')) + '+…' : '';
-        keys.dataset.value = '';
+        keys.value = mods.length ? prettyKeys(mods.join('+'), this.hostOS) + '+…' : '';
         return;
       }
       const combo = [...mods, key].join('+');
-      keys.dataset.value = combo;
-      keys.value = pretty(combo);
-      this.autoLabel();
+      this.choose({ type: 'hotkey', keys: combo }, prettyKeys(combo, this.hostOS));
+      this.showRecorded();
+      this.renderShortcuts();
     });
-    document.getElementById('deck-colors')?.addEventListener('click', (e) => {
+
+    document.getElementById('deck-media-list')?.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      const c = MEDIA_CHOICES[parseInt(chip.dataset.i, 10)];
+      this.choose({ type: c.type, key: c.key }, c.label);
+      this.renderMedia();
+    });
+
+    const text = document.getElementById('deck-text');
+    text?.addEventListener('input', () => {
+      document.getElementById('deck-text-count').textContent = String(text.value.length);
+      this.choose({ type: 'text', text: text.value }, text.value.split('\n')[0]);
+    });
+
+    const url = document.getElementById('deck-url');
+    url?.addEventListener('input', () => {
+      let host = '';
+      try { host = new URL(url.value.trim()).host.replace(/^www\./, ''); } catch (e) { /* incomplete */ }
+      this.choose({ type: 'url', url: url.value.trim() }, host);
+    });
+
+    document.getElementById('deck-label')?.addEventListener('input', () => { this.labelTouched = true; });
+
+    const colors = document.getElementById('deck-colors');
+    const selectSwatch = (sw) => colors.querySelectorAll('.swatch').forEach(s => s.setAttribute('aria-checked', String(s === sw)));
+    colors?.addEventListener('click', (e) => {
       const sw = e.target.closest('.swatch');
-      if (!sw) return;
-      document.querySelectorAll('#deck-colors .swatch').forEach(s => s.setAttribute('aria-checked', String(s === sw)));
+      if (sw) selectSwatch(sw); // the custom swatch's click also opens the colour picker
+    });
+    // Custom colour wheel: update its swatch live as the user drags in the picker.
+    colors?.addEventListener('input', (e) => {
+      if (e.target.id !== 'deck-color-custom') return;
+      const sw = e.target.closest('.swatch');
+      sw.style.setProperty('--accent', e.target.value);
+      sw.classList.add('has-color');
+      selectSwatch(sw);
     });
     document.getElementById('deck-form')?.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -319,7 +483,7 @@ export class Deck {
     if (!b || !this.server) return;
     el.classList.add('pressed');
     setTimeout(() => el.classList.remove('pressed'), 220);
-    const action = { type: b.type, key: b.key, keys: b.keys, url: b.url, id: b.id };
+    const action = { type: b.type, key: b.key, keys: b.keys, url: b.url, id: b.id, text: b.text };
     try {
       await MonitorClient.post(this.server, '/api/deck/press', action);
       el.classList.add('ok');
@@ -329,91 +493,175 @@ export class Deck {
     }
   }
 
-  async loadLaunchList() {
-    if (this.launchList) return this.launchList;
-    try {
-      const resp = await fetch(`${MonitorClient.baseURL(this.server)}/api/deck/actions`, { headers: MonitorClient.authHeaders(this.server) });
-      const data = await resp.json();
-      this.launchList = resp.ok ? data : { launch: [], error: data.message };
-    } catch (e) {
-      this.launchList = { launch: [], error: 'Server unreachable' };
-    }
-    return this.launchList;
-  }
+  // ---------------------------------------------------------------- editor
 
-  async openEditor(i) {
+  openEditor(i) {
     this.editIndex = i;
-    const b = i >= 0 ? this.buttons[i] : { type: 'media', key: 'play_pause', label: '', color: 'blue' };
+    const b = i >= 0 ? { ...this.buttons[i] } : { type: 'app', color: 'blue' };
+    this.draft = { ...b };
+    this.labelTouched = i >= 0;
     document.getElementById('deck-modal-title').textContent = i >= 0 ? 'Edit button' : 'Add button';
     document.getElementById('btn-deck-delete').classList.toggle('hidden', i < 0);
     document.getElementById('deck-error').classList.add('hidden');
-    document.getElementById('deck-type').value = b.type;
-    document.getElementById('deck-media').value = b.key || 'play_pause';
-    const keys = document.getElementById('deck-keys');
-    keys.dataset.value = b.keys || '';
-    keys.value = b.keys ? pretty(b.keys) : '';
-    document.getElementById('deck-url').value = b.url || '';
     document.getElementById('deck-label').value = b.label || '';
-    this.labelTouched = i >= 0;
+    document.getElementById('deck-app-search').value = '';
+    document.getElementById('deck-shortcut-search').value = '';
+    document.getElementById('deck-text').value = b.type === 'text' ? b.text || '' : '';
+    document.getElementById('deck-text-count').textContent = String(document.getElementById('deck-text').value.length);
+    document.getElementById('deck-url').value = b.type === 'url' ? b.url || '' : '';
+    const current = b.color || 'blue';
+    const custom = HEX_COLOR.test(current) ? current : '';
     document.getElementById('deck-colors').innerHTML = Object.entries(DECK_COLORS).map(([name, css]) =>
-      `<button type="button" class="swatch" role="radio" aria-label="${name}" aria-checked="${name === (b.color || 'blue')}" data-color="${name}" style="--accent: ${css}"></button>`).join('');
+      `<button type="button" class="swatch" role="radio" aria-label="${name}" aria-checked="${name === current}" data-color="${name}" style="--accent: ${css}"></button>`).join('') +
+      // Custom colour: a rainbow wheel until a colour is picked, then that colour.
+      `<label class="swatch swatch-custom ${custom ? 'has-color' : ''}" role="radio" aria-label="Custom colour" aria-checked="${!!custom}"
+              title="Custom colour" ${custom ? `style="--accent: ${custom}"` : ''}>
+         <input id="deck-color-custom" type="color" value="${custom || '#0a84ff'}" aria-label="Pick a custom colour">
+       </label>`;
+    this.showRecorded();
     document.getElementById('deck-modal').classList.remove('hidden');
-
-    const list = await this.loadLaunchList();
-    const sel = document.getElementById('deck-launch');
-    sel.innerHTML = (list.launch || []).map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
-    if (b.id) sel.value = b.id;
-    const help = document.getElementById('deck-launch-help');
-    help.textContent = list.error
-      ? list.error
-      : (list.launch?.length ? 'Apps are configured on the server' : 'No apps configured yet. ')
-        + (list.actions_file ? ` (${list.actions_file})` : '') + (list.launch?.length ? '.' : ' Add them there to make them available here; see the README.');
-    this.syncFields(false);
+    this.showCategory(CATEGORY_OF[b.type] || 'app');
   }
 
-  syncFields(fromTypeChange) {
-    const type = document.getElementById('deck-type').value;
-    document.querySelectorAll('#deck-form .deck-field').forEach(f => f.classList.toggle('hidden', f.dataset.for !== type));
-    if (fromTypeChange && !this.labelTouched) document.getElementById('deck-label').value = '';
-    this.autoLabel();
+  showCategory(cat) {
+    this.cat = cat;
+    document.querySelectorAll('#deck-cats .deck-cat').forEach(t => t.setAttribute('aria-selected', String(t.dataset.cat === cat)));
+    document.querySelectorAll('#deck-form .deck-pane').forEach(p => p.classList.toggle('hidden', p.dataset.pane !== cat));
+    if (cat === 'app') { this.loadApps(); setTimeout(() => document.getElementById('deck-app-search')?.focus(), 30); }
+    if (cat === 'shortcut') { this.renderShortcuts(); setTimeout(() => document.getElementById('deck-shortcut-search')?.focus(), 30); }
+    if (cat === 'media') this.renderMedia();
   }
 
-  // Suggest a label until the user types their own.
-  autoLabel() {
+  // Select an action; suggest a label until the user types their own.
+  choose(fields, suggestedLabel) {
+    this.draft = { color: this.draft?.color, ...fields };
     const label = document.getElementById('deck-label');
-    if (this.labelTouched && label.value) return;
-    const type = document.getElementById('deck-type').value;
-    let s = '';
-    if (type === 'media') s = MEDIA_LABELS[document.getElementById('deck-media').value];
-    else if (type === 'mic_mute') s = 'Mic mute';
-    else if (type === 'lock') s = 'Lock';
-    else if (type === 'hotkey') s = document.getElementById('deck-keys').value.replace('…', '');
-    else if (type === 'launch') s = document.getElementById('deck-launch').selectedOptions[0]?.text || '';
-    if (s) label.value = s.slice(0, 18);
-    label.oninput = () => { this.labelTouched = true; };
+    if (!this.labelTouched && suggestedLabel) label.value = String(suggestedLabel).slice(0, 18);
+    document.getElementById('deck-error').classList.add('hidden');
+  }
+
+  showRecorded() {
+    const keys = document.getElementById('deck-keys');
+    if (keys) keys.value = this.draft?.type === 'hotkey' && this.draft.keys ? prettyKeys(this.draft.keys, this.hostOS) : '';
+  }
+
+  async loadApps() {
+    const list = document.getElementById('deck-app-list');
+    const help = document.getElementById('deck-app-help');
+    if (!this.apps) {
+      list.innerHTML = '<div class="sub-text pick-empty">Loading apps from the host…</div>';
+      try {
+        const [apps, custom] = await Promise.all([
+          fetch(`${MonitorClient.baseURL(this.server)}/api/deck/apps`, { headers: MonitorClient.authHeaders(this.server) }).then(r => r.ok ? r.json() : Promise.reject(r)),
+          fetch(`${MonitorClient.baseURL(this.server)}/api/deck/actions`, { headers: MonitorClient.authHeaders(this.server) }).then(r => r.ok ? r.json() : { launch: [] }).catch(() => ({ launch: [] })),
+        ]);
+        this.apps = apps.apps || [];
+        this.launchList = custom.launch || [];
+        help.textContent = `${this.apps.length} apps found on ${this.server.name}.` +
+          (custom.actions_file ? ` Apps that need arguments can be added to ${custom.actions_file}.` : '');
+      } catch (e) {
+        this.apps = null;
+        list.innerHTML = '<div class="sub-text pick-empty">Couldn\'t load apps. This server may be running an older version.</div>';
+        help.textContent = '';
+        return;
+      }
+    }
+    this.renderApps();
+  }
+
+  renderApps() {
+    const list = document.getElementById('deck-app-list');
+    if (!list || !this.apps) return;
+    const q = document.getElementById('deck-app-search').value.trim().toLowerCase();
+    const match = (n) => !q || n.toLowerCase().includes(q);
+    const selected = (type, id) => this.draft?.type === type && this.draft.id === id;
+    const item = (type, a) => `
+      <button type="button" class="pick-item ${selected(type, a.id) ? 'is-selected' : ''}" role="option"
+              aria-selected="${selected(type, a.id)}" data-type="${type}" data-id="${esc(a.id)}" data-name="${esc(a.name)}">
+        <span class="pick-avatar">${esc(a.name.trim().charAt(0).toUpperCase())}</span>
+        <span class="pick-name">${esc(a.name)}</span>
+      </button>`;
+    const custom = (this.launchList || []).filter(a => match(a.name));
+    const apps = this.apps.filter(a => match(a.name)).slice(0, 250);
+    let html = '';
+    if (custom.length) html += '<div class="pick-group">Custom (actions.json)</div>' + custom.map(a => item('launch', a)).join('');
+    if (apps.length) html += (custom.length ? '<div class="pick-group">Installed apps</div>' : '') + apps.map(a => item('app', a)).join('');
+    list.innerHTML = html || `<div class="sub-text pick-empty">No apps match "${esc(q)}".</div>`;
+  }
+
+  renderShortcuts() {
+    const list = document.getElementById('deck-shortcut-list');
+    if (!list) return;
+    const q = document.getElementById('deck-shortcut-search').value.trim().toLowerCase();
+    let html = '';
+    for (const g of shortcutsFor(this.hostOS)) {
+      const items = g.items.filter(it => !q || it.label.toLowerCase().includes(q) || g.group.toLowerCase().includes(q) || it.keys.includes(q));
+      if (!items.length) continue;
+      html += `<div class="pick-group">${esc(g.group)}</div>` + items.map((it) => {
+        const sel = this.draft?.type === 'hotkey' && this.draft.keys === it.keys;
+        // "Discord: toggle mute" -> "Discord mute" for the button label.
+        const short = it.label.replace(/:\s*(toggle\s+)?/, ' ');
+        return `
+        <button type="button" class="pick-item ${sel ? 'is-selected' : ''}" role="option" aria-selected="${sel}"
+                data-keys="${esc(it.keys)}" data-label="${esc(short)}">
+          <span class="pick-name">${esc(it.label)}</span>
+          <kbd>${esc(prettyKeys(it.keys, this.hostOS))}</kbd>
+        </button>`;
+      }).join('');
+    }
+    list.innerHTML = html || `<div class="sub-text pick-empty">No shortcuts match "${esc(q)}". Record your own below.</div>`;
+  }
+
+  renderMedia() {
+    const list = document.getElementById('deck-media-list');
+    if (!list) return;
+    list.innerHTML = MEDIA_CHOICES.map((c, i) => {
+      const sel = this.draft?.type === c.type && (c.type !== 'media' || this.draft.key === c.key);
+      return `<button type="button" class="chip ${sel ? 'is-selected' : ''}" role="option" aria-selected="${sel}" data-i="${i}">
+        <span class="chip-icon">${iconFor({ type: c.type, key: c.key })}</span>${esc(c.label)}</button>`;
+    }).join('');
+  }
+
+  selectedColor() {
+    const sw = document.querySelector('#deck-colors .swatch[aria-checked="true"]');
+    if (sw?.classList.contains('swatch-custom')) {
+      const v = document.getElementById('deck-color-custom').value;
+      return HEX_COLOR.test(v) ? v.toLowerCase() : 'blue';
+    }
+    return sw?.dataset.color || 'blue';
   }
 
   saveEditor() {
     const err = document.getElementById('deck-error');
     const fail = (m) => { err.textContent = m; err.classList.remove('hidden'); };
-    const type = document.getElementById('deck-type').value;
+    const d = this.draft || {};
+    const cat = this.cat;
     const b = {
-      type,
+      type: d.type,
       label: document.getElementById('deck-label').value.trim(),
-      color: document.querySelector('#deck-colors .swatch[aria-checked="true"]')?.dataset.color || 'blue',
+      color: this.selectedColor(),
     };
-    if (type === 'media') b.key = document.getElementById('deck-media').value;
-    if (type === 'hotkey') {
-      b.keys = document.getElementById('deck-keys').dataset.value;
-      if (!b.keys) return fail('Click the shortcut field and press a key combination.');
+    if (CATEGORY_OF[d.type] !== cat) {
+      return fail({
+        app: 'Pick an app from the list.', shortcut: 'Pick a shortcut or record your own.',
+        media: 'Pick an action.', text: 'Type the text to send.', url: 'Enter a web address.',
+      }[cat]);
     }
-    if (type === 'url') {
-      b.url = document.getElementById('deck-url').value.trim();
-      if (!/^https?:\/\/[^/\s]+/i.test(b.url)) return fail('Enter a web address starting with http:// or https://');
-    }
-    if (type === 'launch') {
-      b.id = document.getElementById('deck-launch').value;
-      if (!b.id) return fail('No apps are configured on the server yet.');
+    switch (d.type) {
+      case 'media': b.key = d.key; break;
+      case 'hotkey':
+        if (!d.keys) return fail('Pick a shortcut or record your own.');
+        b.keys = d.keys; break;
+      case 'app':
+      case 'launch':
+        if (!d.id) return fail('Pick an app from the list.');
+        b.id = d.id; b.appName = d.appName; break;
+      case 'text':
+        if (!d.text) return fail('Type the text to send.');
+        b.text = d.text; break;
+      case 'url':
+        if (!/^https?:\/\/[^/\s]+/i.test(d.url || '')) return fail('Enter a web address starting with http:// or https://');
+        b.url = d.url; break;
     }
     if (!b.label) return fail('Give the button a label.');
     if (this.editIndex >= 0) this.buttons[this.editIndex] = b;

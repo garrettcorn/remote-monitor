@@ -20,6 +20,7 @@ const (
 	inputKeyboard     = 1
 	keyeventfExtended = 0x0001
 	keyeventfKeyUp    = 0x0002
+	keyeventfUnicode  = 0x0004
 	swShowNormal      = 1
 )
 

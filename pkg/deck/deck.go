@@ -17,11 +17,12 @@ import (
 
 // Action is one button press request from the dashboard.
 type Action struct {
-	Type string `json:"type"`           // "media", "hotkey", "lock", "mic_mute", "url", "launch"
+	Type string `json:"type"`           // "media", "hotkey", "lock", "mic_mute", "url", "launch", "app", "text"
 	Key  string `json:"key,omitempty"`  // media key name
 	Keys string `json:"keys,omitempty"` // hotkey, e.g. "ctrl+shift+m"
 	URL  string `json:"url,omitempty"`  // http(s) URL to open
-	ID   string `json:"id,omitempty"`   // launch action id from the actions file
+	ID   string `json:"id,omitempty"`   // launch: id from the actions file; app: installed app id
+	Text string `json:"text,omitempty"` // text snippet to type
 }
 
 // MediaKeys are the supported media/volume key names.
@@ -193,6 +194,16 @@ func Press(a Action, launchFile string) error {
 			}
 		}
 		return fmt.Errorf("no launch action %q in %s", a.ID, launchFile)
+	case "app":
+		if a.ID == "" {
+			return errors.New("no app selected")
+		}
+		return launchInstalledApp(a.ID)
+	case "text":
+		if err := validateText(a.Text); err != nil {
+			return err
+		}
+		return typeText(a.Text)
 	}
 	return fmt.Errorf("unknown action type %q", a.Type)
 }

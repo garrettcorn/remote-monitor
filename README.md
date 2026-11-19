@@ -74,9 +74,12 @@ When the server starts, it automatically outputs:
 | **Buttons: media & volume keys** | ✅ `SendInput` virtual keys | 🟡 `xdotool key XF86Audio…` (X11) | ❌ |
 | **Buttons: keyboard shortcuts** | ✅ `SendInput` | 🟡 `xdotool key` (X11; Wayland blocks synthetic input) | 🟡 AppleScript System Events (needs Accessibility permission) |
 | **Buttons: lock screen** | ✅ `LockWorkStation` | 🟡 `loginctl lock-session` | 🟡 `pmset displaysleepnow` |
-| **Buttons: open URL / launch app** | ✅ `ShellExecute` | 🟡 `xdg-open` / direct exec | 🟡 `open` |
+| **Buttons: installed-app picker** | ✅ PowerShell `Get-StartApps` (Start-menu, Store and game shortcuts), launched via `shell:AppsFolder\<AppID>` | 🟡 freedesktop `.desktop` entries, launched with `gtk-launch` (or the entry's `Exec`) | 🟡 `.app` bundles in the Applications folders, launched with `open -a` |
+| **Buttons: type text snippet** | ✅ `SendInput` with `KEYEVENTF_UNICODE` (any language/emoji) | 🟡 `xdotool type` (X11) | 🟡 AppleScript `keystroke` (needs Accessibility permission) |
+| **Buttons: open URL / custom launch** | ✅ `ShellExecute` | 🟡 `xdg-open` / direct exec | 🟡 `open` |
 | **Mic mute toggle** | ✅ Core Audio | 🟡 `pactl` | ❌ |
 | **Shutdown / restart** | ✅ `shutdown /s` / `/r` (5 s delay) | 🟡 `systemctl poweroff` / `reboot` | 🟡 AppleScript System Events |
+| **Sleep** | ✅ `SetSuspendState` (powrprof, with `SeShutdownPrivilege`; sleeps rather than hibernates) | 🟡 `systemctl suspend` | 🟡 `pmset sleepnow` |
 
 The server is a single Go binary with no runtime dependencies on Windows. The Linux/macOS tools above are used only if they're installed; missing ones just leave that panel empty.
 
@@ -164,18 +167,21 @@ Start the server with `-read-only` for monitoring only: control is disabled and 
 
 ### Control Panel & Stream Deck Buttons
 
-The **Control Panel** at the top of the dashboard holds a Stream Deck-style button grid, audio controls (output/input device, volume, mute) and Restart / Shut down. Click **Edit** on the button grid to add, edit, delete or drag-to-reorder buttons. Available actions:
+The **Control Panel** at the top of the dashboard holds a Stream Deck-style button grid, audio controls (output/input device, volume, mute) and power controls (**Lock, Sleep, Restart, Shut down**). The mute and mic-mute buttons light up while muted.
 
-| Action | What it does on the host |
-|---|---|
-| Media & volume key | Play/pause, next, previous, stop, volume up/down, mute |
-| Toggle microphone mute | Mutes/unmutes the default input device |
-| Lock screen | Locks the session |
-| Keyboard shortcut | Sends a key combination (e.g. `Ctrl+Shift+M` for Discord mute, OBS hotkeys) to the active window |
-| Open web page | Opens an `http(s)://` address in the host's default browser |
-| Launch app | Starts an app from the server's allowlist (below) |
+Click **Edit** on the button grid to add, edit, delete or drag-to-reorder buttons. The editor has five tabs:
 
-Button layouts are saved per server in your browser. For safety, dashboards can only launch apps the server owner lists in `~/.pc_monitor/actions.json` (re-read on every press, no restart needed):
+| Tab | What you pick | What it does on the host |
+|---|---|---|
+| **App** | Any app installed on the host, from a searchable list (Start-menu programs, Store apps and games such as Steam titles) | Launches it |
+| **Shortcut** | A searchable library of ~60 common shortcuts (Windows, Xbox Game Bar, editing, browser, Discord, Teams, Zoom, Google Meet; macOS equivalents on Mac hosts), or record your own combination | Sends the keys to the active window |
+| **Media & system** | Play/pause, previous, next, stop, volume up/down, mute speakers, mic mute, lock screen | Media keys / mute / lock |
+| **Text** | Up to 1000 characters, e.g. an email address or a canned reply | Types the text into the active window |
+| **Website** | An `http(s)://` address | Opens it in the host's default browser |
+
+Labels are suggested automatically (you can change them), and button layouts are saved per server in your browser.
+
+For safety, the dashboard never sends program paths. App buttons refer to an app by the ID the server discovered itself, and the server checks that ID against its own list before launching. To launch something that needs arguments or a working folder, list it in `~/.pc_monitor/actions.json` (re-read on every press, no restart needed); these appear under **Custom** in the App tab:
 
 ```json
 {
@@ -186,7 +192,7 @@ Button layouts are saved per server in your browser. For safety, dashboards can 
 }
 ```
 
-Only `id` and `name` are sent to dashboards; paths and arguments stay on the server. Button actions need a PIN-paired dashboard and are disabled in `-read-only` mode. On Linux they use `xdotool`, `loginctl` and `xdg-open` (X11); on macOS, AppleScript (no media keys).
+Only `id` and `name` are sent to dashboards; paths and arguments stay on the server. Button actions need a PIN-paired dashboard and are disabled in `-read-only` mode. See [Platform Support](#-platform-support) for how each action works on Linux and macOS.
 
 ### Displays & Screen Preview
 

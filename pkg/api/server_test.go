@@ -246,3 +246,25 @@ func TestScreenshotEndpoint(t *testing.T) {
 		t.Fatalf("screenshot on read-only: %d", w.Code)
 	}
 }
+
+func TestDeckAppsEndpoint(t *testing.T) {
+	pin, _ := control.NewPIN(nil)
+	collector := telemetry.NewCollector(500 * time.Millisecond)
+	srv := NewServer("test-server", "secret-token", collector, Options{PIN: pin})
+	srv.listApps = func() ([]deck.App, error) { return []deck.App{{ID: "obs", Name: "OBS Studio"}}, nil }
+	h := srv.Handler()
+	tok := map[string]string{"X-Pairing-Token": "secret-token"}
+	if w := do(t, h, "GET", "/api/deck/apps", "", tok); w.Code != http.StatusUnauthorized {
+		t.Fatalf("apps without session: %d", w.Code)
+	}
+	w := do(t, h, "POST", "/api/pair", `{"pin":"`+pin.Current()+`"}`, tok)
+	var pair struct {
+		Session string `json:"session"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &pair)
+	tok["X-Session"] = pair.Session
+	w = do(t, h, "GET", "/api/deck/apps", "", tok)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"OBS Studio"`) {
+		t.Fatalf("apps: %d %s", w.Code, w.Body.String())
+	}
+}

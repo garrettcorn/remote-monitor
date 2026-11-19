@@ -47,11 +47,14 @@ pc_monitor/
 │   │   ├── audio_darwin.go         # osascript: system output/input volume, output mute only
 │   │   └── audio_other.go          # unsupported
 │   ├── power/power.go              # shutdown/restart (Windows `shutdown /t 5`; systemctl; osascript)
+│   │   (sleep_windows.go: SetSuspendState + SeShutdownPrivilege; sleep_other.go: systemctl suspend / pmset sleepnow)
 │   ├── deck/                       # Stream Deck button actions
 │   │   ├── deck.go                 # Action types, hotkey parsing, URL validation, launch allowlist (actions.json)
 │   │   ├── input_windows.go        # SendInput (media keys, hotkeys), LockWorkStation, ShellExecute
 │   │   ├── input_linux.go          # xdotool / loginctl / xdg-open (X11)
 │   │   ├── input_darwin.go         # osascript System Events / pmset / open (no media keys)
+│   │   ├── apps.go                 # Installed-app discovery (cached 5 min, noise-filtered), ID-checked launch, text validation
+│   │   ├── apps_<os>.go            # Get-StartApps + shell:AppsFolder / .desktop + gtk-launch / .app + open -a; typeText per OS
 │   │   └── deck_test.go
 │   ├── display/                    # Displays + screen capture
 │   │   ├── display.go              # Types, Capture() (one at a time), box-filter downscale + JPEG encode
@@ -69,7 +72,7 @@ pc_monitor/
 │   ├── pairing/                    # Token gen, pairing URL, HTML card, pure-Go QR encoder + ANSI/SVG render
 │   └── tailcat/tunnel.go           # StartTunnel(): key persistence, DERP bootstrap
 ├── web/                            # Static client, deployed to GitHub Pages as-is
-│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=13); sections tagged data-section="…"
+│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=16); sections tagged data-section="…"
 │   ├── style.css                   # "Liquid Glass" theme, light + dark
 │   └── js/ app.js, client.js, ui.js, panel.js (Customize + Stream Deck), storage.js, charts.js, qr-scanner.js
 ├── scripts/                        # build.ps1/.sh (cross-compile), release.ps1/.sh (local packaging)
@@ -200,9 +203,10 @@ PIN: 4 digits (crypto/rand), constant-time compare, one-time; rotated after use 
 | `POST` | `/api/audio/volume` | token + session | `{id, volume 0-100}` → fresh audio state |
 | `POST` | `/api/audio/mute` | token + session | `{id, muted}` → fresh audio state |
 | `POST` | `/api/audio/default` | token + session | `{id}` → fresh audio state |
-| `POST` | `/api/power` | token + session | `{action: "shutdown"\|"restart"}` |
+| `POST` | `/api/power` | token + session | `{action}`: `shutdown`, `restart` or `sleep` |
 | `GET` | `/api/deck/actions` | token + session | Launch allowlist (`id`, `name` only), `actions_file`, `media_keys` |
-| `POST` | `/api/deck/press` | token + session | `{type: media\|hotkey\|lock\|mic_mute\|url\|launch, key?, keys?, url?, id?}` |
+| `GET` | `/api/deck/apps` | token + session | Installed apps on the host (`id`, `name`), cached 5 min |
+| `POST` | `/api/deck/press` | token + session | `{type, key?, keys?, url?, id?, text?}`; type is `media`, `hotkey`, `lock`, `mic_mute`, `url`, `launch`, `app` or `text` |
 | `GET` | `/api/display/screenshot` | token + session | `?index=N&width=W` → `image/jpeg` (`no-store`); 403 `screen_disabled` with `-no-screen`; never in read-only |
 
 Token: `?token=`, `X-Pairing-Token`, or `Authorization: Bearer`. Session: `X-Session` or `?session=`.
@@ -253,6 +257,9 @@ PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 
 
 ### Stream Deck buttons (`pkg/deck`, `web/js/panel.js`)
 - Action types: `media` (play_pause/next/previous/stop/volume_up/volume_down/volume_mute), `hotkey` (`ctrl+shift+m`: modifiers ctrl/shift/alt/win + one key a–z, 0–9, f1–f24 or named), `lock`, `mic_mute`, `url` (http/https only), `launch` (id from `~/.pc_monitor/actions.json`; paths never leave the server).
+- `app`: installed app by discovered ID (dashboard never sends paths; server re-checks the ID). `text`: up to 1000 printable chars, typed via KEYEVENTF_UNICODE / xdotool type / AppleScript keystroke (text passed as argv).
+- Editor (`Deck` in `panel.js`): five tabs (App, Shortcut, Media & system, Text, Website); `SHORTCUTS` is the preset library (OS-aware: `os` groups, `cmd` groups map Ctrl→Cmd on macOS, optional per-item mac keys); `prettyKeys` shows Cmd/Option on Mac hosts. Mute/mic-mute buttons get `.is-on` from live audio state.
+- Never press app, text, shortcut, media or sleep buttons on the dev machine while testing; create/inspect/delete buttons instead.
 - Button layouts are per server in the browser; defaults are 8 media/volume/mic/lock keys.
 - Hotkeys can type arbitrary input on the host, so they are as trusted as shutdown: PIN session required, disabled in read-only.
 

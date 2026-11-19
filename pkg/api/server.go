@@ -45,9 +45,10 @@ type Server struct {
 	clients    map[*websocket.Conn]struct{}
 
 	// Overridable for tests.
-	doPower func(power.Action) error
-	doDeck  func(deck.Action, string) error
-	capture func(index, maxWidth int) ([]byte, error)
+	doPower  func(power.Action) error
+	doDeck   func(deck.Action, string) error
+	capture  func(index, maxWidth int) ([]byte, error)
+	listApps func() ([]deck.App, error)
 }
 
 // NewServer creates a new API server.
@@ -66,6 +67,7 @@ func NewServer(serverName, token string, collector *telemetry.Collector, opts Op
 		doPower:    power.Do,
 		doDeck:     deck.Press,
 		capture:    display.Capture,
+		listApps:   deck.ListApps,
 	}
 }
 
@@ -91,6 +93,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/audio/default", s.requireControl(s.handleAudioDefault))
 	mux.HandleFunc("/api/power", s.requireControl(s.handlePower))
 	mux.HandleFunc("/api/deck/actions", s.requireControlMethod(http.MethodGet, s.handleDeckActions))
+	mux.HandleFunc("/api/deck/apps", s.requireControlMethod(http.MethodGet, s.handleDeckApps))
 	mux.HandleFunc("/api/deck/press", s.requireControl(s.handleDeckPress))
 	mux.HandleFunc("/api/display/screenshot", s.requireControlMethod(http.MethodGet, s.handleScreenshot))
 
@@ -308,8 +311,8 @@ func (s *Server) handlePower(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a := power.Action(body.Action)
-	if a != power.Shutdown && a != power.Restart {
-		errorJSON(w, http.StatusBadRequest, "bad_request", "action must be \"shutdown\" or \"restart\"")
+	if a != power.Shutdown && a != power.Restart && a != power.Sleep {
+		errorJSON(w, http.StatusBadRequest, "bad_request", "action must be \"shutdown\", \"restart\" or \"sleep\"")
 		return
 	}
 	if err := s.doPower(a); err != nil {
@@ -317,6 +320,20 @@ func (s *Server) handlePower(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "scheduled", "action": string(a)})
+}
+
+// handleDeckApps lists apps installed on the host (id + name) for the
+// button editor. Launching re-validates the id server-side.
+func (s *Server) handleDeckApps(w http.ResponseWriter, r *http.Request) {
+	apps, err := s.listApps()
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "apps_error", err.Error())
+		return
+	}
+	if apps == nil {
+		apps = []deck.App{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"apps": apps})
 }
 
 // handleDeckActions lists the launch actions configured on the server

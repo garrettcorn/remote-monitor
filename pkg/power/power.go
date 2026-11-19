@@ -1,4 +1,4 @@
-// Package power shuts down or restarts the host.
+// Package power shuts down, restarts or sleeps the host.
 package power
 
 import (
@@ -14,11 +14,15 @@ type Action string
 const (
 	Shutdown Action = "shutdown"
 	Restart  Action = "restart"
+	Sleep    Action = "sleep"
 )
 
 // Do schedules the action a few seconds out so the API response can be
 // delivered before the machine goes down.
 func Do(a Action) error {
+	if a == Sleep {
+		return doSleep()
+	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
