@@ -1,10 +1,11 @@
 // Main Application Orchestrator for PC Monitor GitHub Pages Client
 
 import { ServerStore } from './storage.js';
-import { MonitorClient } from './client.js?v=6';
+import { MonitorClient } from './client.js?v=9';
 import { SparklineChart } from './charts.js';
-import { UI } from './ui.js?v=6';
+import { UI } from './ui.js?v=9';
 import { QRScanner } from './qr-scanner.js';
+import { Layout, Deck } from './panel.js?v=9';
 
 class App {
   constructor() {
@@ -19,8 +20,11 @@ class App {
   }
 
   init() {
+    Layout.apply(false);
+    this.deck = new Deck(this);
     this.initCharts();
     this.initEvents();
+    this.initSettings();
     this.handleURLHash();
     this.refreshServerList();
     this.startFleetMonitoring();
@@ -123,7 +127,25 @@ class App {
   // ---------------------------------------------------------------- control
 
   setControlUI(enabled) {
-    document.querySelectorAll('.control-only').forEach(el => el.classList.toggle('hidden', !enabled));
+    Layout.apply(enabled);
+    const sub = document.getElementById('control-sub');
+    if (sub) sub.textContent = enabled ? 'Buttons, audio and power for this computer' : 'Read-only server: controls are disabled';
+  }
+
+  // "Customize dashboard" dialog: show/hide sections (saved in this browser).
+  initSettings() {
+    document.getElementById('btn-settings')?.addEventListener('click', () => {
+      Layout.renderSettings();
+      document.getElementById('settings-modal')?.classList.remove('hidden');
+    });
+    document.getElementById('settings-list')?.addEventListener('change', (e) => {
+      const box = e.target.closest('input.switch');
+      if (box) Layout.setHidden(box.dataset.id, !box.checked);
+    });
+    document.getElementById('btn-settings-showall')?.addEventListener('click', () => {
+      Layout.showAll();
+      Layout.renderSettings();
+    });
   }
 
   renderAudio(state, force = false) {
@@ -308,6 +330,7 @@ class App {
       ServerStore.saveServer(server);
     }
     this.setControlUI(!!server.controlEnabled);
+    this.deck.setServer(server);
     if (health?.pin_required && !server.session) {
       this.requirePIN(server);
       return;

@@ -10,6 +10,7 @@ import (
 	"github.com/coder/websocket"
 	"pc_monitor/pkg/audio"
 	"pc_monitor/pkg/control"
+	"pc_monitor/pkg/deck"
 	"pc_monitor/pkg/power"
 	"pc_monitor/pkg/telemetry"
 )
@@ -24,6 +25,9 @@ type Options struct {
 	// Sessions stores PIN-issued sessions; nil means in-memory only. Pass a
 	// persistent store (control.LoadSessions) to survive restarts.
 	Sessions *control.Sessions
+	// ActionsFile is the allowlist of apps Stream Deck buttons may launch
+	// (re-read on each use). Empty disables launch actions.
+	ActionsFile string
 }
 
 // Server handles HTTP and WebSocket telemetry requests.
@@ -38,6 +42,7 @@ type Server struct {
 
 	// Overridable for tests.
 	doPower func(power.Action) error
+	doDeck  func(deck.Action, string) error
 }
 
 // NewServer creates a new API server.
@@ -54,6 +59,7 @@ func NewServer(serverName, token string, collector *telemetry.Collector, opts Op
 		sessions:   sessions,
 		clients:    make(map[*websocket.Conn]struct{}),
 		doPower:    power.Do,
+		doDeck:     deck.Press,
 	}
 }
 
@@ -72,6 +78,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/audio/mute", s.requireControl(s.handleAudioMute))
 	mux.HandleFunc("/api/audio/default", s.requireControl(s.handleAudioDefault))
 	mux.HandleFunc("/api/power", s.requireControl(s.handlePower))
+	mux.HandleFunc("/api/deck/actions", s.requireControlMethod(http.MethodGet, s.handleDeckActions))
+	mux.HandleFunc("/api/deck/press", s.requireControl(s.handleDeckPress))
 
 	return s.corsMiddleware(mux)
 }
@@ -129,6 +137,11 @@ func (s *Server) requireAccess(next http.HandlerFunc) http.HandlerFunc {
 
 // requireControl additionally rejects read-only servers and non-POSTs.
 func (s *Server) requireControl(next http.HandlerFunc) http.HandlerFunc {
+	return s.requireControlMethod(http.MethodPost, next)
+}
+
+// requireControlMethod is requireControl for a specific HTTP method.
+func (s *Server) requireControlMethod(method string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.controlEnabled() {
 			if !s.validateToken(r) {
@@ -138,8 +151,8 @@ func (s *Server) requireControl(next http.HandlerFunc) http.HandlerFunc {
 			errorJSON(w, http.StatusForbidden, "read_only", "this server is running in read-only mode")
 			return
 		}
-		if r.Method != http.MethodPost {
-			errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
+		if r.Method != method {
+			errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "use "+method)
 			return
 		}
 		s.requireAccess(next)(w, r)
@@ -290,6 +303,37 @@ func (s *Server) handlePower(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "scheduled", "action": string(a)})
+}
+
+// handleDeckActions lists the launch actions configured on the server
+// (names only; paths and arguments stay on the server).
+func (s *Server) handleDeckActions(w http.ResponseWriter, r *http.Request) {
+	actions, err := deck.LoadLaunchActions(s.opts.ActionsFile)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "actions_error", err.Error())
+		return
+	}
+	launch := make([]deck.LaunchInfo, 0, len(actions))
+	for _, a := range actions {
+		launch = append(launch, deck.LaunchInfo{ID: a.ID, Name: a.Name})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"launch":       launch,
+		"actions_file": s.opts.ActionsFile,
+		"media_keys":   deck.MediaKeys,
+	})
+}
+
+func (s *Server) handleDeckPress(w http.ResponseWriter, r *http.Request) {
+	var a deck.Action
+	if !decodeBody(w, r, &a) {
+		return
+	}
+	if err := s.doDeck(a, s.opts.ActionsFile); err != nil {
+		errorJSON(w, http.StatusBadRequest, "deck_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {

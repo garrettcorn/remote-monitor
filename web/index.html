@@ -8,7 +8,7 @@
   <meta name="color-scheme" content="dark light">
   <title>PC Monitor — System Telemetry & Multi-Server Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 
@@ -39,6 +39,9 @@
         <span id="header-status-dot" class="status-dot dot-connecting"></span>
         <span id="header-status-text">Connecting...</span>
       </div>
+      <button id="btn-settings" class="icon-btn" title="Customize dashboard" aria-label="Customize dashboard">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h8M15 5h2M3 10h2M9 10h8M3 15h10M17 15h0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"/><circle cx="13" cy="5" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="7" cy="10" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="15" cy="15" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+      </button>
       <button id="btn-pair-modal" class="btn btn-primary btn-sm"><svg class="btn-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>Pair Server</button>
     </div>
   </header>
@@ -48,7 +51,7 @@
     <!-- ================= VIEW 1: DETAILED SERVER DASHBOARD ================= -->
     <div id="view-dashboard">
       <!-- System Summary Bar -->
-      <section class="system-summary-bar">
+      <section class="system-summary-bar" data-section="summary">
         <div class="system-meta-list">
           <div class="meta-item">
             <span class="meta-label">Hostname</span>
@@ -80,16 +83,53 @@
           </div>
         </div>
         <div class="summary-actions">
-          <button id="btn-restart" class="btn btn-outline btn-sm control-only hidden" title="Restart this computer">Restart</button>
-          <button id="btn-shutdown" class="btn btn-outline btn-sm control-only hidden" title="Shut down this computer">Shut down</button>
           <button id="btn-delete-server" class="btn btn-danger btn-sm" title="Unpair this server">Unpair</button>
+        </div>
+      </section>
+
+      <!-- Control Panel: Stream Deck buttons, audio, power -->
+      <section id="control-panel" class="metric-card control-panel" data-section="control">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Control Panel</div>
+            <div id="control-sub" class="sub-text">Buttons, audio and power for this computer</div>
+          </div>
+        </div>
+        <div class="cp-grid">
+          <div class="cp-panel cp-deck control-only" data-section="deck">
+            <div class="cp-panel-header">
+              <div class="audio-label">Stream Deck</div>
+              <button id="btn-deck-edit" class="btn btn-outline btn-sm" aria-pressed="false">Edit</button>
+            </div>
+            <div id="deck-grid" class="deck-grid"></div>
+          </div>
+          <div class="cp-side">
+            <div class="cp-panel" data-section="audio">
+              <div class="cp-panel-header">
+                <div class="audio-label">Audio</div>
+                <div id="audio-mode-badge" class="badge hidden">Read-only</div>
+              </div>
+              <div id="audio-container">
+                <div class="sub-text">Waiting for audio devices...</div>
+              </div>
+            </div>
+            <div class="cp-panel control-only" data-section="power">
+              <div class="cp-panel-header">
+                <div class="audio-label">Power</div>
+              </div>
+              <div class="power-row">
+                <button id="btn-restart" class="btn btn-outline" title="Restart this computer">Restart</button>
+                <button id="btn-shutdown" class="btn btn-outline btn-danger-outline" title="Shut down this computer">Shut down</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
       <!-- Row 1: Hero Metrics (CPU, Memory, Network, Temps) -->
       <section class="grid-hero">
         <!-- CPU Card -->
-        <div class="metric-card">
+        <div class="metric-card" data-section="cpu">
           <div class="card-header">
             <div>
               <div class="card-title">Processor (CPU)</div>
@@ -116,7 +156,7 @@
         </div>
 
         <!-- Memory Card -->
-        <div class="metric-card">
+        <div class="metric-card" data-section="memory">
           <div class="card-header">
             <div>
               <div class="card-title">Memory (RAM)</div>
@@ -144,7 +184,7 @@
         </div>
 
         <!-- Network Card -->
-        <div class="metric-card">
+        <div class="metric-card" data-section="network">
           <div class="card-header">
             <div>
               <div class="card-title">Network Activity</div>
@@ -167,7 +207,7 @@
         </div>
 
         <!-- Temperatures Card -->
-        <div class="metric-card">
+        <div class="metric-card" data-section="thermals">
           <div class="card-header">
             <div>
               <div class="card-title">Thermals & Sensors</div>
@@ -183,7 +223,7 @@
       <!-- Row 2: Per-Core CPU Load & GPU Cards -->
       <section class="grid-two-col">
         <!-- Per-core load -->
-        <div class="metric-card">
+        <div class="metric-card" data-section="cores">
           <div class="card-header">
             <div class="card-title">Per-Core CPU Utilization</div>
           </div>
@@ -193,7 +233,7 @@
         </div>
 
         <!-- Dedicated Graphics (GPU) -->
-        <div class="metric-card">
+        <div class="metric-card" data-section="gpu">
           <div class="card-header">
             <div class="card-title">Graphics Hardware (GPU)</div>
           </div>
@@ -203,22 +243,9 @@
         </div>
       </section>
 
-      <!-- Row: Audio & Drive Health -->
+      <!-- Row: Drive Health & Connected Devices -->
       <section class="grid-equal-col">
-        <div class="metric-card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Audio</div>
-              <div id="audio-sub" class="sub-text">Output and input devices</div>
-            </div>
-            <div id="audio-mode-badge" class="badge hidden">Read-only</div>
-          </div>
-          <div id="audio-container">
-            <div class="sub-text">Waiting for audio devices...</div>
-          </div>
-        </div>
-
-        <div class="metric-card">
+        <div class="metric-card" data-section="health">
           <div class="card-header">
             <div>
               <div class="card-title">Drive Health</div>
@@ -229,10 +256,22 @@
             <div class="sub-text">Checking drives...</div>
           </div>
         </div>
+
+        <div class="metric-card" data-section="devices">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Connected Devices</div>
+              <div class="sub-text">USB, Bluetooth and display devices attached to the host</div>
+            </div>
+          </div>
+          <div id="devices-container" class="devices-grid">
+            <div class="sub-text">Scanning devices...</div>
+          </div>
+        </div>
       </section>
 
       <!-- Row 3: Drives & Storage -->
-      <section class="metric-card" style="margin-bottom: 24px;">
+      <section class="metric-card" data-section="storage" style="margin-bottom: 24px;">
         <div class="card-header">
           <div>
             <div class="card-title">Storage & Disk Partitions</div>
@@ -244,21 +283,8 @@
         </div>
       </section>
 
-      <!-- Row: Connected Devices -->
-      <section class="metric-card" style="margin-bottom: 24px;">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Connected Devices</div>
-            <div class="sub-text">USB, Bluetooth and display devices attached to the host</div>
-          </div>
-        </div>
-        <div id="devices-container" class="devices-grid">
-          <div class="sub-text">Scanning devices...</div>
-        </div>
-      </section>
-
       <!-- Row 4: Network Adapters & IP Addresses -->
-      <section class="metric-card" style="margin-bottom: 24px;">
+      <section class="metric-card" data-section="adapters" style="margin-bottom: 24px;">
         <div class="card-header">
           <div>
             <div class="card-title">Network Adapters & IP Configuration</div>
@@ -271,7 +297,7 @@
       </section>
 
       <!-- Row 5: Top Processes -->
-      <section class="metric-card">
+      <section class="metric-card" data-section="processes">
         <div class="card-header">
           <div>
             <div class="card-title">Top Active Processes</div>
@@ -364,6 +390,91 @@
     </div>
   </div>
 
+  <!-- ================= CUSTOMIZE DASHBOARD MODAL ================= -->
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal-card settings-card">
+      <div class="modal-header">
+        <div class="modal-title">Customize dashboard</div>
+        <button class="modal-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <p class="sub-text" style="margin-bottom: 14px;">Choose which sections to show. Saved in this browser for all servers.</p>
+      <div id="settings-list"></div>
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button id="btn-settings-showall" type="button" class="btn btn-outline" style="flex: 1;">Show all</button>
+        <button type="button" class="btn btn-primary modal-close-btn" style="flex: 1;">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= STREAM DECK BUTTON EDITOR ================= -->
+  <div id="deck-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div id="deck-modal-title" class="modal-title">Add button</div>
+        <button class="modal-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <form id="deck-form" autocomplete="off">
+        <div class="form-group">
+          <label class="form-label" for="deck-type">Action</label>
+          <div class="server-selector-box">
+            <select id="deck-type" class="server-select">
+              <option value="media">Media &amp; volume key</option>
+              <option value="mic_mute">Toggle microphone mute</option>
+              <option value="lock">Lock screen</option>
+              <option value="hotkey">Keyboard shortcut</option>
+              <option value="url">Open web page</option>
+              <option value="launch">Launch app</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group deck-field" data-for="media">
+          <label class="form-label" for="deck-media">Key</label>
+          <div class="server-selector-box">
+            <select id="deck-media" class="server-select">
+              <option value="play_pause">Play / Pause</option>
+              <option value="next">Next track</option>
+              <option value="previous">Previous track</option>
+              <option value="stop">Stop</option>
+              <option value="volume_up">Volume up</option>
+              <option value="volume_down">Volume down</option>
+              <option value="volume_mute">Mute speakers</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group deck-field" data-for="hotkey">
+          <label class="form-label" for="deck-keys">Shortcut</label>
+          <input id="deck-keys" class="form-input" type="text" placeholder="Click, then press keys (e.g. Ctrl+Shift+M)" readonly>
+          <span class="sub-text">Press the key combination here. It is sent to the active window on the host.</span>
+        </div>
+        <div class="form-group deck-field" data-for="url">
+          <label class="form-label" for="deck-url">Web address</label>
+          <input id="deck-url" class="form-input" type="url" placeholder="https://example.com">
+        </div>
+        <div class="form-group deck-field" data-for="launch">
+          <label class="form-label" for="deck-launch">App</label>
+          <div class="server-selector-box">
+            <select id="deck-launch" class="server-select"></select>
+          </div>
+          <span id="deck-launch-help" class="sub-text"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="deck-label">Label</label>
+          <input id="deck-label" class="form-input" type="text" maxlength="18" placeholder="Shown on the button">
+        </div>
+        <div class="form-group">
+          <span class="form-label">Colour</span>
+          <div id="deck-colors" class="color-swatches" role="radiogroup" aria-label="Button colour"></div>
+        </div>
+        <div id="deck-error" class="pin-error hidden"></div>
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button id="btn-deck-delete" type="button" class="btn btn-danger hidden">Delete</button>
+          <button type="button" class="btn btn-outline modal-close-btn" style="flex: 1;">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- ================= CONTROL PIN MODAL ================= -->
   <div id="pin-modal" class="modal-overlay hidden">
     <div class="modal-card pin-card">
@@ -389,6 +500,6 @@
   </div>
 
   <!-- Main JavaScript App -->
-  <script type="module" src="js/app.js?v=6"></script>
+  <script type="module" src="js/app.js?v=9"></script>
 </body>
 </html>

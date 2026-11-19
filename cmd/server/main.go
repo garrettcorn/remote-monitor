@@ -102,6 +102,7 @@ func main() {
 			sessions = nil
 		}
 		opts.Sessions = sessions
+		opts.ActionsFile = filepath.Join(stateDir, "actions.json")
 	}
 	apiServer := api.NewServer(*serverName, token, collector, opts)
 	httpHandler := apiServer.Handler()
@@ -215,6 +216,7 @@ func main() {
 		if opts.Sessions != nil {
 			fmt.Printf("  Paired:         %d dashboard(s) remembered across restarts (-reset-pairing to revoke)\n", opts.Sessions.Count())
 		}
+		fmt.Printf("  Launch buttons: apps allowed for Stream Deck buttons are listed in %s\n", opts.ActionsFile)
 	} else {
 		fmt.Println("  Remote control: disabled (read-only mode). No PIN required.")
 	}

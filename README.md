@@ -127,6 +127,36 @@ Pairings are remembered: the pairing token and paired sessions are saved in `~/.
 
 Start the server with `-read-only` for monitoring only: control is disabled and no PIN is needed.
 
+### Control Panel & Stream Deck Buttons
+
+The **Control Panel** at the top of the dashboard holds a Stream Deck-style button grid, audio controls (output/input device, volume, mute) and Restart / Shut down. Click **Edit** on the button grid to add, edit, delete or drag-to-reorder buttons. Available actions:
+
+| Action | What it does on the host |
+|---|---|
+| Media & volume key | Play/pause, next, previous, stop, volume up/down, mute |
+| Toggle microphone mute | Mutes/unmutes the default input device |
+| Lock screen | Locks the session |
+| Keyboard shortcut | Sends a key combination (e.g. `Ctrl+Shift+M` for Discord mute, OBS hotkeys) to the active window |
+| Open web page | Opens an `http(s)://` address in the host's default browser |
+| Launch app | Starts an app from the server's allowlist (below) |
+
+Button layouts are saved per server in your browser. For safety, dashboards can only launch apps the server owner lists in `~/.pc_monitor/actions.json` (re-read on every press, no restart needed):
+
+```json
+{
+  "launch": [
+    { "id": "obs", "name": "OBS Studio", "path": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe", "dir": "C:\\Program Files\\obs-studio\\bin\\64bit" },
+    { "id": "notepad", "name": "Notepad", "path": "notepad.exe" }
+  ]
+}
+```
+
+Only `id` and `name` are sent to dashboards; paths and arguments stay on the server. Button actions need a PIN-paired dashboard and are disabled in `-read-only` mode. On Linux they use `xdotool`, `loginctl` and `xdg-open` (X11); on macOS, AppleScript (no media keys).
+
+### Customize the Dashboard
+
+Click the **sliders icon** in the header to show or hide any section (CPU, memory, Stream Deck, audio, power, drive health, processes, and so on). Hidden cards leave no gaps, and your choices are saved in this browser.
+
 ---
 
 ## 🚀 CI/CD Pipelines & Releases
@@ -279,6 +309,6 @@ pc_monitor/
 - **No Third-Party Cloud Dependency**: Your telemetry is never routed through third-party servers. Connections are established point-to-point via WireGuard encryption over Tailcat's data-plane or direct LAN.
 - **Session Authentication**: Every server session generates a cryptographically secure pairing token (`crypto/rand`). Requests without the token are rejected with `401 Unauthorized`.
 - **Private by Default**: Storage credentials remain strictly in your browser's local `localStorage`.
-- **PIN-Gated Control**: When remote control is enabled, telemetry and control both require a session that is only issued in exchange for a one-time PIN shown on the server console. Five wrong guesses replace the PIN, so a stolen pairing link alone cannot connect or power the machine off. Use `-read-only` to remove control entirely.
+- **PIN-Gated Control**: When remote control is enabled, telemetry and control both require a session that is only issued in exchange for a one-time PIN shown on the server console. Five wrong guesses replace the PIN, so a stolen pairing link alone cannot connect or power the machine off. Use `-read-only` to remove control entirely. Treat paired dashboards as fully trusted: keyboard-shortcut buttons can type on the host.
 - **Plain HTTP on the LAN port**: The direct port (`-port`, default `9120`) is unencrypted HTTP. Prefer Tailscale/Tailcat or a trusted network when control is enabled.
 - **SMART details need elevation**: Drive health status works for any user; temperature, wear and error counters require running the server as administrator (Windows) or root with `smartctl` (Linux).

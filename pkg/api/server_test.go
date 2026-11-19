@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"pc_monitor/pkg/control"
+	"pc_monitor/pkg/deck"
 	"pc_monitor/pkg/power"
 	"pc_monitor/pkg/telemetry"
 )
@@ -152,5 +154,46 @@ func TestPINRotatesAfterFailures(t *testing.T) {
 	}
 	if rotations != 1 {
 		t.Fatalf("expected PIN to rotate after %d failures, rotations=%d", control.MaxFailures, rotations)
+	}
+}
+
+func TestDeckEndpoints(t *testing.T) {
+	pin, _ := control.NewPIN(nil)
+	collector := telemetry.NewCollector(500 * time.Millisecond)
+	actionsFile := t.TempDir() + "/actions.json"
+	_ = os.WriteFile(actionsFile, []byte(`{"launch":[{"id":"notes","name":"Notepad","path":"notepad.exe","args":"secret.txt"}]}`), 0o600)
+	srv := NewServer("test-server", "secret-token", collector, Options{PIN: pin, ActionsFile: actionsFile})
+	var pressed []deck.Action
+	srv.doDeck = func(a deck.Action, _ string) error { pressed = append(pressed, a); return nil }
+	h := srv.Handler()
+
+	w := do(t, h, "POST", "/api/pair", `{"pin":"`+pin.Current()+`"}`, map[string]string{"X-Pairing-Token": "secret-token"})
+	var pair struct {
+		Session string `json:"session"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &pair)
+	auth := map[string]string{"X-Pairing-Token": "secret-token", "X-Session": pair.Session}
+
+	// Listing exposes names only, never paths/args.
+	w = do(t, h, "GET", "/api/deck/actions", "", auth)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"Notepad"`) || strings.Contains(w.Body.String(), "secret.txt") || strings.Contains(w.Body.String(), "notepad.exe") {
+		t.Fatalf("actions listing: %d %s", w.Code, w.Body.String())
+	}
+
+	// Pressing needs a session.
+	if w := do(t, h, "POST", "/api/deck/press", `{"type":"lock"}`, map[string]string{"X-Pairing-Token": "secret-token"}); w.Code != http.StatusUnauthorized {
+		t.Fatalf("press without session: %d", w.Code)
+	}
+	if w := do(t, h, "POST", "/api/deck/press", `{"type":"media","key":"play_pause"}`, auth); w.Code != http.StatusOK {
+		t.Fatalf("press: %d %s", w.Code, w.Body.String())
+	}
+	if len(pressed) != 1 || pressed[0].Key != "play_pause" {
+		t.Fatalf("expected one press, got %+v", pressed)
+	}
+
+	// Read-only servers refuse deck actions.
+	ro := NewServer("ro", "secret-token", collector, Options{ReadOnly: true})
+	if w := do(t, ro.Handler(), "POST", "/api/deck/press?token=secret-token", `{"type":"lock"}`, nil); w.Code != http.StatusForbidden {
+		t.Fatalf("read-only press: %d", w.Code)
 	}
 }
