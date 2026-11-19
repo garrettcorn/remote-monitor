@@ -8,7 +8,7 @@
   <meta name="color-scheme" content="dark light">
   <title>PC Monitor — System Telemetry & Multi-Server Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 
@@ -97,9 +97,8 @@
         </div>
         <div class="cp-grid">
           <div class="cp-panel cp-deck control-only" data-section="deck">
-            <div class="cp-panel-header">
-              <div class="audio-label">Stream Deck</div>
-              <button id="btn-deck-edit" class="btn btn-outline btn-sm" aria-pressed="false">Edit</button>
+            <div class="cp-panel-header" style="justify-content: flex-end;">
+              <button id="btn-deck-edit" class="btn btn-outline btn-sm" aria-pressed="false" aria-label="Edit buttons">Edit</button>
             </div>
             <div id="deck-grid" class="deck-grid"></div>
           </div>
@@ -217,6 +216,26 @@
           <div id="temp-list-container" class="temp-list">
             <div class="sub-text">Awaiting telemetry...</div>
           </div>
+        </div>
+      </section>
+
+      <!-- Displays: connected displays and screen preview -->
+      <section class="metric-card" data-section="displays" style="margin-bottom: 18px;">
+        <div class="card-header displays-header">
+          <div>
+            <div class="card-title">Displays</div>
+            <div id="displays-sub" class="sub-text">Connected displays, resolution and refresh rate</div>
+          </div>
+          <div class="displays-controls">
+            <label class="switch-inline" title="Capture every 10 seconds">
+              <span>Auto-refresh</span>
+              <input id="screen-autorefresh" type="checkbox" class="switch">
+            </label>
+            <button id="btn-screen-capture" class="btn btn-outline btn-sm">Capture</button>
+          </div>
+        </div>
+        <div id="displays-container" class="displays-grid">
+          <div class="sub-text">Detecting displays...</div>
         </div>
       </section>
 
@@ -390,6 +409,18 @@
     </div>
   </div>
 
+  <!-- ================= SCREEN PREVIEW VIEWER ================= -->
+  <div id="screen-modal" class="modal-overlay hidden">
+    <div class="modal-card screen-card">
+      <div class="modal-header">
+        <div id="screen-modal-title" class="modal-title">Display</div>
+        <button class="modal-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <img id="screen-modal-img" class="screen-full" alt="Screen preview">
+      <div id="screen-modal-time" class="sub-text" style="margin-top: 8px;"></div>
+    </div>
+  </div>
+
   <!-- ================= CUSTOMIZE DASHBOARD MODAL ================= -->
   <div id="settings-modal" class="modal-overlay hidden">
     <div class="modal-card settings-card">
@@ -500,6 +531,6 @@
   </div>
 
   <!-- Main JavaScript App -->
-  <script type="module" src="js/app.js?v=11"></script>
+  <script type="module" src="js/app.js?v=13"></script>
 </body>
 </html>

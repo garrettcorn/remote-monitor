@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"pc_monitor/pkg/audio"
+	"pc_monitor/pkg/display"
 )
 
 // Collector gathers and caches system performance telemetry.
@@ -50,6 +51,7 @@ type slowData struct {
 	smartDetails bool
 	devices      []ConnectedDevice
 	users        []UserSession
+	monitorNames map[string]string // display.HardwareID -> model name
 }
 
 const slowInterval = 30 * time.Second
@@ -175,7 +177,19 @@ func (c *Collector) collect() {
 	snap.Elevated = serverElevated
 	snap.Devices = c.slow.devices
 	snap.Users = c.slow.users
+	names := c.slow.monitorNames
 	c.slowMu.Unlock()
+
+	// Displays are cheap to enumerate, so refresh them every tick; model
+	// names come from the slow (background) refresh.
+	if ds, err := display.List(); err == nil {
+		for i := range ds {
+			if n := names[ds[i].HardwareID]; n != "" {
+				ds[i].Name = n
+			}
+		}
+		snap.Displays = ds
+	}
 
 	c.mu.Lock()
 	c.lastSnapshot = snap
@@ -188,6 +202,7 @@ func (c *Collector) refreshSlow() {
 	d.disks, d.smartDetails = collectPhysicalDisks()
 	d.devices = collectDevices()
 	d.users = collectUsers()
+	d.monitorNames = collectMonitorNames()
 
 	c.slowMu.Lock()
 	c.slow = d

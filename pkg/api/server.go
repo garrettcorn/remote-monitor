@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"pc_monitor/pkg/audio"
 	"pc_monitor/pkg/control"
 	"pc_monitor/pkg/deck"
+	"pc_monitor/pkg/display"
 	"pc_monitor/pkg/power"
 	"pc_monitor/pkg/telemetry"
 )
@@ -28,6 +30,8 @@ type Options struct {
 	// ActionsFile is the allowlist of apps Stream Deck buttons may launch
 	// (re-read on each use). Empty disables launch actions.
 	ActionsFile string
+	// NoScreen disables screen capture previews even when control is enabled.
+	NoScreen bool
 }
 
 // Server handles HTTP and WebSocket telemetry requests.
@@ -43,6 +47,7 @@ type Server struct {
 	// Overridable for tests.
 	doPower func(power.Action) error
 	doDeck  func(deck.Action, string) error
+	capture func(index, maxWidth int) ([]byte, error)
 }
 
 // NewServer creates a new API server.
@@ -60,10 +65,17 @@ func NewServer(serverName, token string, collector *telemetry.Collector, opts Op
 		clients:    make(map[*websocket.Conn]struct{}),
 		doPower:    power.Do,
 		doDeck:     deck.Press,
+		capture:    display.Capture,
 	}
 }
 
 func (s *Server) controlEnabled() bool { return !s.opts.ReadOnly && s.opts.PIN != nil }
+
+// screenCaptureEnabled: screen images are sensitive, so they need a
+// PIN-paired (control) session and can be switched off with -no-screen.
+func (s *Server) screenCaptureEnabled() bool {
+	return s.controlEnabled() && !s.opts.NoScreen && display.CaptureSupported()
+}
 
 // Handler returns the HTTP multiplexer configured with routes and middleware.
 func (s *Server) Handler() http.Handler {
@@ -80,6 +92,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/power", s.requireControl(s.handlePower))
 	mux.HandleFunc("/api/deck/actions", s.requireControlMethod(http.MethodGet, s.handleDeckActions))
 	mux.HandleFunc("/api/deck/press", s.requireControl(s.handleDeckPress))
+	mux.HandleFunc("/api/display/screenshot", s.requireControlMethod(http.MethodGet, s.handleScreenshot))
 
 	return s.corsMiddleware(mux)
 }
@@ -197,6 +210,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"time":            time.Now().UTC().Format(time.RFC3339),
 		"control_enabled": s.controlEnabled(),
 		"pin_required":    s.controlEnabled(),
+		"screen_capture":  s.screenCaptureEnabled(),
 	})
 }
 
@@ -334,6 +348,30 @@ func (s *Server) handleDeckPress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handleScreenshot returns a JPEG of one display (?index=N, ?width=max px).
+func (s *Server) handleScreenshot(w http.ResponseWriter, r *http.Request) {
+	if !s.screenCaptureEnabled() {
+		errorJSON(w, http.StatusForbidden, "screen_disabled", "screen capture is disabled on this server")
+		return
+	}
+	index, err := strconv.Atoi(r.URL.Query().Get("index"))
+	if err != nil || index < 0 {
+		index = 0
+	}
+	width, err := strconv.Atoi(r.URL.Query().Get("width"))
+	if err != nil || width <= 0 {
+		width = 1280
+	}
+	img, err := s.capture(index, width)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "capture_failed", err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(img)
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {

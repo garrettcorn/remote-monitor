@@ -1,11 +1,11 @@
 // Main Application Orchestrator for PC Monitor GitHub Pages Client
 
 import { ServerStore } from './storage.js';
-import { MonitorClient } from './client.js?v=11';
+import { MonitorClient } from './client.js?v=13';
 import { SparklineChart } from './charts.js';
-import { UI } from './ui.js?v=11';
+import { UI } from './ui.js?v=13';
 import { QRScanner } from './qr-scanner.js';
-import { Layout, Deck } from './panel.js?v=11';
+import { Layout, Deck, Screens } from './panel.js?v=13';
 
 class App {
   constructor() {
@@ -22,6 +22,7 @@ class App {
   init() {
     Layout.apply(false);
     this.deck = new Deck(this);
+    this.screens = new Screens(this);
     this.initCharts();
     this.initEvents();
     this.initSettings();
@@ -342,10 +343,12 @@ class App {
     if (this.activeServer !== server) return; // user switched again meanwhile
     if (health) {
       server.controlEnabled = !!health.control_enabled;
+      server.screenCapture = !!health.screen_capture;
       ServerStore.saveServer(server);
     }
     this.setControlUI(!!server.controlEnabled);
     this.deck.setServer(server);
+    this.screens.setServer(server, !!server.screenCapture && !!server.controlEnabled);
     if (health?.pin_required && !server.session) {
       this.requirePIN(server);
       return;
@@ -363,6 +366,7 @@ class App {
         ServerStore.saveServer(server);
         UI.renderSnapshot(snapshot, this.charts);
         this.renderAudio(snapshot.audio);
+        this.screens.update(snapshot.displays);
       },
       (status, message) => {
         this.updateConnectionStatus(status, message);

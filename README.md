@@ -47,6 +47,41 @@ When the server starts, it automatically outputs:
 
 ---
 
+## 🧩 Platform Support
+
+✅ supported · 🟡 partial or needs setup · ❌ not available. Windows is the primary platform and is tested on real hardware; Linux and macOS builds compile in CI and use the tools below, but haven't been verified on real machines yet.
+
+| Feature | Windows | Linux | macOS |
+|---|---|---|---|
+| **CPU load & frequency** | ✅ `GetSystemTimes`; model + MHz from the registry | ✅ `/proc/stat`, `/proc/cpuinfo` | ✅ `top -l 1`, `sysctl machdep.cpu.brand_string` |
+| **Per-core CPU** | ✅ `NtQuerySystemInformation` (processor performance counters) | ✅ `/proc/stat` per-CPU lines | 🟡 shows overall load for every core |
+| **Memory & swap** | ✅ `GlobalMemoryStatusEx` | ✅ `/proc/meminfo` | ✅ `sysctl hw.memsize`, `vm_stat` |
+| **Uptime** | ✅ `GetTickCount64` | ✅ `/proc/uptime` | ✅ `sysctl kern.boottime` |
+| **Processes (top 10, count)** | ✅ Toolhelp snapshot + `GetProcessTimes` / `K32GetProcessMemoryInfo` | ✅ `ps -eo pid,%cpu,%mem,rss,comm` | ✅ `ps -arcwwwxo …` |
+| **Signed-in users** | ✅ `WTSEnumerateSessions` (Remote Desktop Services API) | ✅ `who` | ✅ `who` |
+| **Battery** | ✅ `GetSystemPowerStatus` | ✅ `/sys/class/power_supply/BAT*` | ✅ `pmset -g batt` |
+| **GPU** | ✅ `nvidia-smi` (load, VRAM, temp, power, fan, clocks); name only for AMD/Intel via the registry | 🟡 `nvidia-smi` (load, VRAM, temp); NVIDIA only | 🟡 name only via `system_profiler SPDisplaysDataType` |
+| **Temperatures** | 🟡 GPU via `nvidia-smi` + ACPI thermal zones via PDH `\Thermal Zone Information`; no CPU core temps without admin/driver | ✅ `/sys/class/thermal/thermal_zone*` + GPU | 🟡 needs the third-party `osx-cpu-temp` tool |
+| **Network totals & rates** | ✅ `GetIfEntry2Ex` (`MIB_IF_ROW2`) per adapter, incl. link speed | ✅ `/proc/net/dev`; link speed from `/sys/class/net/*/speed` | 🟡 adapters and IPs only (Go `net.Interfaces`); no traffic counters |
+| **Volumes (space)** | ✅ `GetDiskFreeSpaceEx` for every drive letter | ✅ `/proc/mounts` + `statfs` | 🟡 main volume (`/`) only via `statfs` |
+| **Disk I/O (read/write, active %)** | ✅ PDH `\LogicalDisk(*)\…` performance counters | ✅ `/proc/diskstats` | ❌ |
+| **Drive health & SMART** | ✅ health via PowerShell `Get-PhysicalDisk`; temperature, wear, power-on hours and errors via `Get-StorageReliabilityCounter` (**admin**) | 🟡 drive list from `/sys/block`; health/SMART via `smartctl -j` (**root**, smartmontools) | ❌ |
+| **Connected devices** | ✅ PowerShell `Get-PnpDevice` + device-reported USB names (`DEVPKEY_Device_BusReportedDeviceDesc`); USB, Bluetooth, monitors | 🟡 USB only via `lsusb` | ❌ |
+| **Displays (resolution, refresh, scale)** | ✅ `EnumDisplayMonitors`, `EnumDisplaySettingsW`, `GetDpiForMonitor`; model names from WMI `WmiMonitorID` | 🟡 `xrandr --query` (X11) | ✅ `system_profiler SPDisplaysDataType` |
+| **Screen preview** | ✅ GDI `BitBlt` per monitor (DPI-aware), downscaled JPEG | ❌ | 🟡 built-in `screencapture` (needs Screen Recording permission) |
+| **Audio: list, volume, mute** | ✅ Core Audio (`IMMDeviceEnumerator`, `IAudioEndpointVolume`) | 🟡 `pactl` (PulseAudio/PipeWire, pactl 16+) | 🟡 AppleScript `set volume`: system output/input only, output mute only |
+| **Audio: switch default device** | ✅ `IPolicyConfig` (the interface behind the Sound control panel) | 🟡 `pactl set-default-sink/source` | ❌ |
+| **Buttons: media & volume keys** | ✅ `SendInput` virtual keys | 🟡 `xdotool key XF86Audio…` (X11) | ❌ |
+| **Buttons: keyboard shortcuts** | ✅ `SendInput` | 🟡 `xdotool key` (X11; Wayland blocks synthetic input) | 🟡 AppleScript System Events (needs Accessibility permission) |
+| **Buttons: lock screen** | ✅ `LockWorkStation` | 🟡 `loginctl lock-session` | 🟡 `pmset displaysleepnow` |
+| **Buttons: open URL / launch app** | ✅ `ShellExecute` | 🟡 `xdg-open` / direct exec | 🟡 `open` |
+| **Mic mute toggle** | ✅ Core Audio | 🟡 `pactl` | ❌ |
+| **Shutdown / restart** | ✅ `shutdown /s` / `/r` (5 s delay) | 🟡 `systemctl poweroff` / `reboot` | 🟡 AppleScript System Events |
+
+The server is a single Go binary with no runtime dependencies on Windows. The Linux/macOS tools above are used only if they're installed; missing ones just leave that panel empty.
+
+---
+
 ## 🚀 Quick Start Guide
 
 ### Step 1: Run the Server
@@ -153,6 +188,16 @@ Button layouts are saved per server in your browser. For safety, dashboards can 
 
 Only `id` and `name` are sent to dashboards; paths and arguments stay on the server. Button actions need a PIN-paired dashboard and are disabled in `-read-only` mode. On Linux they use `xdotool`, `loginctl` and `xdg-open` (X11); on macOS, AppleScript (no media keys).
 
+### Displays & Screen Preview
+
+The **Displays** section lists each connected display with its model name, resolution, refresh rate, scaling and which one is primary. On PIN-paired servers you can also see what is on each screen:
+
+- Nothing is captured until you ask: click **Capture** for a one-off snapshot.
+- Turn on **Auto-refresh** to capture every 10 seconds (off by default, remembered in this browser). It pauses while the tab is hidden or the section is hidden.
+- Click a preview to open it larger. Images are scaled to 1280 px wide JPEGs (about 100 KB each).
+
+Screen preview is never available in `-read-only` mode, and `-no-screen` disables it entirely.
+
 ### Customize the Dashboard
 
 Click the **sliders icon** in the header to show or hide any section (CPU, memory, Stream Deck, audio, power, drive health, processes, and so on). Hidden cards leave no gaps, and your choices are saved in this browser.
@@ -255,6 +300,7 @@ The script validates the changelog, runs tests, creates the Git tag `v1.1.0`, an
 | `-export-html`| `pairing_card.html`| Path to write a standalone HTML card with SVG QR code |
 | `-read-only` | `false` | Monitoring only: disable remote control (audio, shutdown/restart); dashboards connect without a PIN |
 | `-reset-pairing` | `false` | Revoke all paired dashboards: new pairing token and cleared PIN sessions |
+| `-no-screen` | `false` | Disable screen capture previews (displays are still listed) |
 | `-verbose` | `false` | Enable detailed debug logs for networking and telemetry |
 
 ---
@@ -311,4 +357,5 @@ pc_monitor/
 - **Private by Default**: Storage credentials remain strictly in your browser's local `localStorage`.
 - **PIN-Gated Control**: When remote control is enabled, telemetry and control both require a session that is only issued in exchange for a one-time PIN shown on the server console. Five wrong guesses replace the PIN, so a stolen pairing link alone cannot connect or power the machine off. Use `-read-only` to remove control entirely. Treat paired dashboards as fully trusted: keyboard-shortcut buttons can type on the host.
 - **Plain HTTP on the LAN port**: The direct port (`-port`, default `9120`) is unencrypted HTTP. Prefer Tailscale/Tailcat or a trusted network when control is enabled.
+- **Screen previews are sensitive**: they're only served to PIN-paired dashboards, never in `-read-only` mode, and are only captured on request or while auto-refresh is on. Use `-no-screen` to turn them off.
 - **SMART details need elevation**: Drive health status works for any user; temperature, wear and error counters require running the server as administrator (Windows) or root with `smartctl` (Linux).

@@ -193,6 +193,40 @@ func collectDevices() []ConnectedDevice {
 	return devs
 }
 
+// ----------------------------------------------------- monitor names
+
+// WmiMonitorID gives each monitor's model name (e.g. "XG259CS"); its
+// InstanceName matches display.Display.HardwareID plus a "_0" suffix.
+const monitorNamesScript = `
+$r = @(Get-CimInstance -Namespace root\wmi -ClassName WmiMonitorID | ForEach-Object {
+  [pscustomobject]@{
+    id = ($_.InstanceName -replace '_\d+$', '').ToUpper()
+    name = (($_.UserFriendlyName | Where-Object { $_ -ne 0 } | ForEach-Object { [char]$_ }) -join '').Trim()
+  }
+})
+ConvertTo-Json -InputObject $r -Compress`
+
+func collectMonitorNames() map[string]string {
+	out, err := runPowerShell(monitorNamesScript)
+	if err != nil {
+		return nil
+	}
+	var raw []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if json.Unmarshal(out, &raw) != nil {
+		return nil
+	}
+	names := make(map[string]string, len(raw))
+	for _, r := range raw {
+		if r.ID != "" && r.Name != "" {
+			names[r.ID] = r.Name
+		}
+	}
+	return names
+}
+
 // -------------------------------------------------------------- users
 
 var (

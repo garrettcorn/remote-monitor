@@ -37,6 +37,7 @@ func main() {
 	exportHTML := flag.String("export-html", "pairing_card.html", "Path to save scannable pairing HTML card")
 	readOnly := flag.Bool("read-only", false, "Monitoring only: disable remote control (audio, shutdown/restart); no PIN needed")
 	resetPairing := flag.Bool("reset-pairing", false, "Revoke all paired dashboards: new pairing token and PIN sessions")
+	noScreen := flag.Bool("no-screen", false, "Disable screen capture previews in the dashboard")
 	verbose := flag.Bool("verbose", false, "Enable verbose debug output")
 	flag.Parse()
 
@@ -86,7 +87,7 @@ func main() {
 	// 4. Create API Server. Unless read-only, dashboards must enter a
 	// one-time PIN (shown only here on the console) to connect; each used
 	// PIN is replaced by a new one for the next dashboard.
-	opts := api.Options{ReadOnly: *readOnly}
+	opts := api.Options{ReadOnly: *readOnly, NoScreen: *noScreen}
 	if !*readOnly {
 		pin, err := control.NewPIN(func(newPIN, reason string) {
 			fmt.Printf("\n  [pairing] %s. New control PIN: %s\n", reason, newPIN)
@@ -217,6 +218,11 @@ func main() {
 			fmt.Printf("  Paired:         %d dashboard(s) remembered across restarts (-reset-pairing to revoke)\n", opts.Sessions.Count())
 		}
 		fmt.Printf("  Launch buttons: apps allowed for Stream Deck buttons are listed in %s\n", opts.ActionsFile)
+		if *noScreen {
+			fmt.Println("  Screen preview: disabled (-no-screen)")
+		} else {
+			fmt.Println("  Screen preview: available to PIN-paired dashboards (-no-screen to disable)")
+		}
 	} else {
 		fmt.Println("  Remote control: disabled (read-only mode). No PIN required.")
 	}

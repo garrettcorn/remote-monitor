@@ -1,8 +1,8 @@
 // Dashboard customization (show/hide sections) and the Stream Deck-style
 // button grid in the Control Panel.
 
-import { UI } from './ui.js?v=11';
-import { MonitorClient } from './client.js?v=11';
+import { UI } from './ui.js?v=13';
+import { MonitorClient } from './client.js?v=13';
 
 const esc = UI.esc;
 
@@ -34,11 +34,12 @@ export const SECTION_GROUPS = [
     ['thermals', 'Thermals & sensors'],
   ] },
   { title: 'Control Panel', items: [
-    ['deck', 'Stream Deck buttons', true],
+    ['deck', 'Buttons', true],
     ['audio', 'Audio'],
     ['power', 'Power (restart / shut down)', true],
   ] },
   { title: 'Hardware', items: [
+    ['displays', 'Displays & screen preview'],
     ['cores', 'Per-core CPU'],
     ['gpu', 'Graphics (GPU)'],
     ['health', 'Drive health'],
@@ -420,5 +421,171 @@ export class Deck {
     this.persist();
     this.render();
     document.getElementById('deck-modal').classList.add('hidden');
+  }
+}
+
+// ----------------------------------------------------------------- displays
+
+const AUTOREFRESH_KEY = 'pc_monitor_screen_autorefresh';
+const REFRESH_MS = 10000;
+
+// Displays card: connected displays plus on-demand / auto-refreshing screen
+// previews. Nothing is captured until the user clicks Capture or turns on
+// auto-refresh (off by default).
+export class Screens {
+  constructor(app) {
+    this.app = app;
+    this.server = null;
+    this.captureEnabled = false;
+    this.displays = [];
+    this.signature = '';
+    this.images = {};     // display index -> object URL
+    this.capturedAt = {}; // display index -> Date
+    this.busy = false;
+    this.viewing = -1;    // index shown in the full-size viewer
+    this.autoRefresh = load(AUTOREFRESH_KEY, false) === true;
+    this.timer = setInterval(() => this.tick(), REFRESH_MS);
+    this.bind();
+  }
+
+  bind() {
+    const toggle = document.getElementById('screen-autorefresh');
+    if (toggle) {
+      toggle.checked = this.autoRefresh;
+      toggle.addEventListener('change', () => {
+        this.autoRefresh = toggle.checked;
+        save(AUTOREFRESH_KEY, this.autoRefresh);
+        if (this.autoRefresh) this.captureAll(); // start immediately, then every 10 s
+      });
+    }
+    document.getElementById('btn-screen-capture')?.addEventListener('click', () => this.captureAll());
+    document.getElementById('displays-container')?.addEventListener('click', (e) => {
+      const prev = e.target.closest('.screen-preview[data-index]');
+      if (prev && this.images[prev.dataset.index]) this.openViewer(parseInt(prev.dataset.index, 10));
+    });
+    document.querySelectorAll('#screen-modal .modal-close-btn').forEach(b => b.addEventListener('click', () => { this.viewing = -1; }));
+  }
+
+  clearImages() {
+    Object.values(this.images).forEach(u => URL.revokeObjectURL(u));
+    this.images = {};
+    this.capturedAt = {};
+  }
+
+  setServer(server, captureEnabled) {
+    if (this.server?.id !== server?.id) this.clearImages();
+    this.server = server;
+    this.captureEnabled = !!captureEnabled;
+    this.signature = '';
+    const toggle = document.getElementById('screen-autorefresh');
+    const btn = document.getElementById('btn-screen-capture');
+    if (toggle) toggle.disabled = !this.captureEnabled;
+    if (btn) btn.disabled = !this.captureEnabled;
+    this.render();
+  }
+
+  // Called with every snapshot; rebuilds cards only when the setup changes.
+  update(displays = []) {
+    this.displays = displays || [];
+    const sig = JSON.stringify(this.displays.map(d => [d.index, d.name, d.width, d.height, d.refresh_hz, d.scale_percent, d.primary]));
+    if (sig !== this.signature) {
+      this.signature = sig;
+      this.render();
+    }
+  }
+
+  placeholder() {
+    if (!this.server) return '';
+    if (this.captureEnabled) return 'Click Capture to see what is on this display';
+    if (!this.server.controlEnabled) return 'Screen preview needs a PIN-paired server (not available in read-only mode)';
+    return 'Screen preview is turned off or not supported on this server';
+  }
+
+  render() {
+    const box = document.getElementById('displays-container');
+    if (!box) return;
+    if (!this.displays.length) {
+      box.innerHTML = '<div class="sub-text">No displays reported by this host.</div>';
+      return;
+    }
+    box.innerHTML = this.displays.map((d) => {
+      const facts = [`${d.width} × ${d.height}`];
+      if (d.refresh_hz) facts.push(`${d.refresh_hz} Hz`);
+      if (d.scale_percent && d.scale_percent !== 100) facts.push(`${d.scale_percent}% scale`);
+      // Windows device names look like \\.\DISPLAY1; show just DISPLAY1.
+      const device = (d.device || '').split('\\').filter(Boolean).pop() || '';
+      const img = this.images[d.index];
+      const at = this.capturedAt[d.index];
+      return `
+        <div class="display-card">
+          <div class="display-head">
+            <div class="display-title">
+              <span class="device-name" title="${esc(d.name)}">${esc(d.name)}</span>
+              ${d.primary ? '<span class="conn-pill">Primary</span>' : ''}
+            </div>
+            <div class="sub-text">${facts.join(' · ')}${device ? ' · ' + esc(device) : ''}</div>
+          </div>
+          <div class="screen-preview ${img ? 'has-image' : ''}" data-index="${d.index}" style="aspect-ratio: ${d.width || 16} / ${d.height || 9}"
+               ${img ? `role="button" tabindex="0" title="Open larger"` : ''}>
+            ${img ? `<img src="${img}" alt="Screen of ${esc(d.name)}">` : `<span class="sub-text">${esc(this.placeholder())}</span>`}
+            ${at ? `<span class="screen-time">${at.toLocaleTimeString()}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Auto-refresh tick: only while enabled, visible and on the dashboard.
+  tick() {
+    if (!this.autoRefresh || !this.captureEnabled || document.hidden) return;
+    if (Layout.isHidden('displays') || this.app.currentView !== 'dashboard') return;
+    this.captureAll();
+  }
+
+  async captureAll() {
+    if (!this.server || !this.captureEnabled || this.busy || !this.displays.length) return;
+    this.busy = true;
+    const btn = document.getElementById('btn-screen-capture');
+    if (btn) btn.textContent = 'Capturing…';
+    const server = this.server;
+    try {
+      for (const d of this.displays) {
+        const url = `${MonitorClient.baseURL(server)}/api/display/screenshot?index=${d.index}&width=1280`;
+        const resp = await fetch(url, { headers: MonitorClient.authHeaders(server), cache: 'no-store' });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          const err = new Error(body.message || `HTTP ${resp.status}`);
+          err.code = body.error;
+          throw err;
+        }
+        const blob = await resp.blob();
+        if (this.server !== server) return; // switched servers meanwhile
+        if (this.images[d.index]) URL.revokeObjectURL(this.images[d.index]);
+        this.images[d.index] = URL.createObjectURL(blob);
+        this.capturedAt[d.index] = new Date();
+        if (this.viewing === d.index) this.openViewer(d.index);
+      }
+      this.render();
+    } catch (e) {
+      if (e.code === 'screen_disabled') {
+        this.captureEnabled = false;
+        this.autoRefresh = false;
+        this.setServer(server, false);
+      }
+      this.app.handleControlError(server, e);
+    } finally {
+      this.busy = false;
+      if (btn) btn.textContent = 'Capture';
+    }
+  }
+
+  openViewer(index) {
+    const d = this.displays.find(x => x.index === index);
+    this.viewing = index;
+    document.getElementById('screen-modal-title').textContent = d ? d.name : 'Display';
+    document.getElementById('screen-modal-img').src = this.images[index];
+    const at = this.capturedAt[index];
+    document.getElementById('screen-modal-time').textContent = at
+      ? `Captured ${at.toLocaleTimeString()}${this.autoRefresh ? ' · refreshing every 10 s' : ''}` : '';
+    document.getElementById('screen-modal').classList.remove('hidden');
   }
 }

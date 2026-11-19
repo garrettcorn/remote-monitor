@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"pc_monitor/pkg/audio"
+	"pc_monitor/pkg/display"
 )
 
 // SystemSnapshot represents the complete telemetry state of a host machine.
@@ -23,6 +24,7 @@ type SystemSnapshot struct {
 	Devices      []ConnectedDevice `json:"devices"`
 	Audio        *audio.State      `json:"audio,omitempty"`
 	Battery      *BatteryInfo      `json:"battery,omitempty"`
+	Displays     []display.Display `json:"displays"`
 	Users        []UserSession     `json:"users"`
 }
 

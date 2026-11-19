@@ -150,3 +150,6 @@ func collectDevices() []ConnectedDevice {
 func collectUsers() []UserSession {
 	return parseWho()
 }
+
+// collectMonitorNames is Windows-only (WMI); other platforms report names directly.
+func collectMonitorNames() map[string]string { return nil }

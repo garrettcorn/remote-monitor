@@ -53,6 +53,12 @@ pc_monitor/
 │   │   ├── input_linux.go          # xdotool / loginctl / xdg-open (X11)
 │   │   ├── input_darwin.go         # osascript System Events / pmset / open (no media keys)
 │   │   └── deck_test.go
+│   ├── display/                    # Displays + screen capture
+│   │   ├── display.go              # Types, Capture() (one at a time), box-filter downscale + JPEG encode
+│   │   ├── display_windows.go      # EnumDisplayMonitors/EnumDisplaySettingsW/GetDpiForMonitor, GDI BitBlt; per-monitor DPI awareness set in init()
+│   │   ├── display_linux.go        # xrandr list; no capture
+│   │   ├── display_darwin.go       # system_profiler list; screencapture
+│   │   └── display_*_test.go       # struct sizes (DEVMODEW 220, DISPLAY_DEVICEW 840, …), downscale
 │   ├── telemetry/
 │   │   ├── types.go                # SystemSnapshot and all JSON types
 │   │   ├── collector.go            # Sampling loop, audio refresh, slow background refresh (30 s)
@@ -63,7 +69,7 @@ pc_monitor/
 │   ├── pairing/                    # Token gen, pairing URL, HTML card, pure-Go QR encoder + ANSI/SVG render
 │   └── tailcat/tunnel.go           # StartTunnel(): key persistence, DERP bootstrap
 ├── web/                            # Static client, deployed to GitHub Pages as-is
-│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=11); sections tagged data-section="…"
+│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=13); sections tagged data-section="…"
 │   ├── style.css                   # "Liquid Glass" theme, light + dark
 │   └── js/ app.js, client.js, ui.js, panel.js (Customize + Stream Deck), storage.js, charts.js, qr-scanner.js
 ├── scripts/                        # build.ps1/.sh (cross-compile), release.ps1/.sh (local packaging)
@@ -102,6 +108,8 @@ No new third-party Go dependencies were added for audio/SMART/devices: Windows u
 | `v1.2.0` | Liquid Glass UI; **PIN-gated remote control** (audio, shutdown/restart), `-read-only`; drive health/SMART; connected devices; disk I/O, adapter rates/link speed, GPU fan/clocks/power limit, battery, users; HTML escaping of host-provided names |
 | `v1.2.1` | **Pairing persists across restarts** (token + session hashes in `~/.pc_monitor`), `-reset-pairing`, single pairing QR code |
 | `v1.3.0` | Control Panel with Stream Deck-style buttons (`pkg/deck`, `/api/deck/*`), Customize dialog to show/hide sections |
+| `v1.3.1` | PIN auto-connect at 4 digits; SMART admin note only when the server is not elevated (`server_elevated`) |
+| *(unreleased)* | Displays section (list + screen preview with auto-refresh, `/api/display/screenshot`, `-no-screen`); "Stream Deck" label removed from the Control Panel; README per-OS feature table |
 
 All released tags have 7 release assets.
 
@@ -162,6 +170,7 @@ go build -o pc_monitor_server.exe ./cmd/server
 | `-export-html` | `pairing_card.html` | Pairing card with SVG QR (`""` to skip) |
 | `-read-only` | `false` | Disable control; no PIN needed |
 | `-reset-pairing` | `false` | Delete saved token + sessions (revokes all dashboards) |
+| `-no-screen` | `false` | Disable screen capture previews |
 | `-verbose` | `false` | Debug logging |
 
 ### Pairing & access control
@@ -194,6 +203,7 @@ PIN: 4 digits (crypto/rand), constant-time compare, one-time; rotated after use 
 | `POST` | `/api/power` | token + session | `{action: "shutdown"\|"restart"}` |
 | `GET` | `/api/deck/actions` | token + session | Launch allowlist (`id`, `name` only), `actions_file`, `media_keys` |
 | `POST` | `/api/deck/press` | token + session | `{type: media\|hotkey\|lock\|mic_mute\|url\|launch, key?, keys?, url?, id?}` |
+| `GET` | `/api/display/screenshot` | token + session | `?index=N&width=W` → `image/jpeg` (`no-store`); 403 `screen_disabled` with `-no-screen`; never in read-only |
 
 Token: `?token=`, `X-Pairing-Token`, or `Authorization: Bearer`. Session: `X-Session` or `?session=`.
 
@@ -236,6 +246,11 @@ Token: `?token=`, `X-Pairing-Token`, or `Authorization: Bearer`. Session: `X-Ses
 
 PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 s (`Collector.refreshSlow`), never on the 1.2 s sampling path.
 
+### Displays & screen preview (`pkg/display`, `Screens` in `web/js/panel.js`)
+- `displays` is in every snapshot (cheap enumeration); Windows model names come from WMI `WmiMonitorID` in the 30 s slow refresh, matched via `Display.HardwareID`.
+- `/api/health` reports `screen_capture` (control enabled, not `-no-screen`, platform supported). The dashboard captures **only** on Capture or while Auto-refresh (default off, `localStorage[pc_monitor_screen_autorefresh]`) is on; ticks pause when the tab/section is hidden.
+- When testing, don't screenshot the dashboard after capturing: the preview contains the user's real screen. Verify captures by image size instead.
+
 ### Stream Deck buttons (`pkg/deck`, `web/js/panel.js`)
 - Action types: `media` (play_pause/next/previous/stop/volume_up/volume_down/volume_mute), `hotkey` (`ctrl+shift+m`: modifiers ctrl/shift/alt/win + one key a–z, 0–9, f1–f24 or named), `lock`, `mic_mute`, `url` (http/https only), `launch` (id from `~/.pc_monitor/actions.json`; paths never leave the server).
 - Button layouts are per server in the browser; defaults are 8 media/volume/mic/lock keys.
@@ -271,6 +286,7 @@ PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 
 
 | Gotcha | Detail |
 |---|---|
+| JS written via shell heredocs | Backslashes in regexes/strings can get mangled (a broken regex in `panel.js` once stopped the whole app). Prefer string ops over regex for paths, and always load the page and check the console |
 | BOM in JSON config | PowerShell `Set-Content -Encoding utf8` and some editors add a UTF-8 BOM; `deck.LoadLaunchActions` strips it. Do the same for any new config file |
 | `SendInput` struct | `INPUT` must be 40 bytes on 64-bit (union sized by `MOUSEINPUT`); `deck_test.go` guards the layout |
 | Testing button actions | Only press harmless keys on the dev machine (e.g. a hotkey for `F24`); never media keys, launch or URL buttons while the user is working |
