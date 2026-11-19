@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release version tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      draft:
+        description: 'Publish as draft'
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Tag Version
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${TAG#v}"
+          echo "RELEASE_TAG=${TAG}" >> $GITHUB_ENV
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "Resolved tag: ${TAG}, version: ${VERSION}"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          check-latest: true
+
+      - name: Validate CHANGELOG.md
+        run: |
+          go run ./cmd/changelog validate
+
+      - name: Extract Release Notes
+        run: |
+          go run ./cmd/changelog extract "${VERSION}" -o release_notes.md
+          echo "=== RELEASE NOTES ==="
+          cat release_notes.md
+
+      - name: Cross-Compile Binaries
+        run: |
+          mkdir -p build
+          # Windows
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o build/pc_monitor_windows_amd64.exe ./cmd/server
+          GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o build/pc_monitor_windows_arm64.exe ./cmd/server
+          # Linux
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o build/pc_monitor_linux_amd64 ./cmd/server
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o build/pc_monitor_linux_arm64 ./cmd/server
+          # macOS
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o build/pc_monitor_darwin_arm64 ./cmd/server
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o build/pc_monitor_darwin_amd64 ./cmd/server
+
+      - name: Package Archives & Generate Checksums
+        run: |
+          mkdir -p dist_release
+          cd build
+
+          # Windows ZIPs
+          zip "../dist_release/pc_monitor_${VERSION}_windows_amd64.zip" pc_monitor_windows_amd64.exe ../README.md ../CHANGELOG.md
+          zip "../dist_release/pc_monitor_${VERSION}_windows_arm64.zip" pc_monitor_windows_arm64.exe ../README.md ../CHANGELOG.md
+
+          # Linux Tarballs
+          tar -czvf "../dist_release/pc_monitor_${VERSION}_linux_amd64.tar.gz" pc_monitor_linux_amd64 ../README.md ../CHANGELOG.md
+          tar -czvf "../dist_release/pc_monitor_${VERSION}_linux_arm64.tar.gz" pc_monitor_linux_arm64 ../README.md ../CHANGELOG.md
+
+          # macOS Tarballs
+          tar -czvf "../dist_release/pc_monitor_${VERSION}_darwin_arm64.tar.gz" pc_monitor_darwin_arm64 ../README.md ../CHANGELOG.md
+          tar -czvf "../dist_release/pc_monitor_${VERSION}_darwin_amd64.tar.gz" pc_monitor_darwin_amd64 ../README.md ../CHANGELOG.md
+
+          cd ../dist_release
+          sha256sum * > checksums.txt
+          echo "=== CHECKSUMS ==="
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Release ${{ env.RELEASE_TAG }}
+          body_path: release_notes.md
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          files: dist_release/*

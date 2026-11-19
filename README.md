@@ -100,7 +100,72 @@ You can pair using any of these methods:
 
 ---
 
-## 🌐 Hosting on GitHub Pages
+## 🚀 CI/CD Pipelines & Releases
+
+This repository includes full GitHub Actions workflows configured in `.github/workflows/`:
+
+1. **`ci.yml` (CI - Test & Build Matrix)**:
+   - Validates `CHANGELOG.md` against [Common Changelog](https://common-changelog.org/) standards.
+   - Runs the full Go test suite.
+   - Cross-compiles binaries for a matrix of 6 targets: `windows/amd64`, `windows/arm64`, `linux/amd64`, `linux/arm64`, `darwin/arm64`, and `darwin/amd64`.
+2. **`deploy-pages.yml` (GitHub Pages Deployment)**:
+   - Automatically builds and deploys the `/web` static dashboard to GitHub Pages upon pushing to `main`.
+3. **`release.yml` (Automated GitHub Releases)**:
+   - Triggered on tag push (`v*`) or manual `workflow_dispatch`.
+   - Extracts release notes directly from `CHANGELOG.md` for that specific version.
+   - Packages binaries into compressed `.zip` and `.tar.gz` archives with `README.md` and `CHANGELOG.md`.
+   - Calculates SHA-256 hashes (`checksums.txt`).
+   - Publishes the GitHub Release with attached assets and release notes.
+
+---
+
+## 📝 Common Changelog (https://common-changelog.org)
+
+Project changes are curated strictly following the [Common Changelog](https://common-changelog.org/) specification:
+- Curated for humans, using the imperative mood (`Add support for...`).
+- Allowed change groups: `### Added`, `### Changed`, `### Removed`, `### Fixed`.
+- Breaking changes are highlighted with `**Breaking:**`.
+- No noisy `[Unreleased]` section. Every version section is explicitly dated `YYYY-MM-DD`.
+
+### Changelog Helper CLI Tool
+A Go tool is included in `cmd/changelog/` to manage releases and validation:
+
+```bash
+# Validate that CHANGELOG.md strictly adheres to common-changelog.org
+go run ./cmd/changelog validate
+
+# Extract release notes for a version (used by CI release workflow)
+go run ./cmd/changelog extract 1.0.0
+
+# Prepare a new version entry with today's date and template categories
+go run ./cmd/changelog bump 1.1.0
+```
+
+### Performing a New Release
+
+To release a new version:
+
+#### 1. Bump the Changelog
+```bash
+go run ./cmd/changelog bump 1.1.0
+# Edit CHANGELOG.md to add your release bullet points under Added/Changed/Fixed
+```
+
+#### 2. Run the Release Helper
+**On Windows (PowerShell):**
+```powershell
+.\scripts\release.ps1 -Version 1.1.0 -Push
+```
+
+**On Linux / macOS (Bash):**
+```bash
+chmod +x scripts/release.sh
+./scripts/release.sh 1.1.0 --push
+```
+
+The script validates the changelog, runs tests, creates the Git tag `v1.1.0`, and pushes to GitHub. The GitHub Actions release pipeline handles the rest automatically!
+
+---
 
 1. Push this repository to GitHub:
    ```bash
