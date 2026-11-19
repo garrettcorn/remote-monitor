@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-11-19
+
+### Changed
+- Remove the "Stream Deck" label from the Control Panel button grid ([`1f9113f`](https://github.com/garrettcorn/remote-monitor/commit/1f9113f))
+
+### Added
+- Add a Displays section listing connected displays with model name, resolution, refresh rate and scaling ([`1f9113f`](https://github.com/garrettcorn/remote-monitor/commit/1f9113f))
+- Add on-demand screen preview with optional 10-second auto-refresh, off by default ([`1f9113f`](https://github.com/garrettcorn/remote-monitor/commit/1f9113f))
+- Add `-no-screen` flag to disable screen previews ([`1f9113f`](https://github.com/garrettcorn/remote-monitor/commit/1f9113f))
+- Add a README table of supported features per operating system and the technology behind each ([`1f9113f`](https://github.com/garrettcorn/remote-monitor/commit/1f9113f))
+
 ## [1.3.1] - 2026-11-19
 
 ### Changed
@@ -99,6 +110,8 @@ All notable changes to this project will be documented in this file.
 - Add multi-server fleet management supporting simultaneous monitoring and live server switching in localStorage (#1)
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
+
+[1.4.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.4.0
 
 [1.3.1]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.3.1
 

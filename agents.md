@@ -109,7 +109,7 @@ No new third-party Go dependencies were added for audio/SMART/devices: Windows u
 | `v1.2.1` | **Pairing persists across restarts** (token + session hashes in `~/.pc_monitor`), `-reset-pairing`, single pairing QR code |
 | `v1.3.0` | Control Panel with Stream Deck-style buttons (`pkg/deck`, `/api/deck/*`), Customize dialog to show/hide sections |
 | `v1.3.1` | PIN auto-connect at 4 digits; SMART admin note only when the server is not elevated (`server_elevated`) |
-| *(unreleased)* | Displays section (list + screen preview with auto-refresh, `/api/display/screenshot`, `-no-screen`); "Stream Deck" label removed from the Control Panel; README per-OS feature table |
+| `v1.4.0` | Displays section (list + screen preview with auto-refresh, `/api/display/screenshot`, `-no-screen`); "Stream Deck" label removed from the Control Panel; README per-OS feature table |
 
 All released tags have 7 release assets.
 
