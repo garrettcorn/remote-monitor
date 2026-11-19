@@ -1,5 +1,15 @@
 # 🖥️ PC Monitor & Multi-Server Telemetry Dashboard
 
+[![CI](https://github.com/garrettcorn/remote-monitor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/garrettcorn/remote-monitor/actions/workflows/ci.yml)
+[![Deploy Pages](https://github.com/garrettcorn/remote-monitor/actions/workflows/deploy-pages.yml/badge.svg?branch=main)](https://github.com/garrettcorn/remote-monitor/actions/workflows/deploy-pages.yml)
+[![Release](https://img.shields.io/github/v/release/garrettcorn/remote-monitor?sort=semver)](https://github.com/garrettcorn/remote-monitor/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/garrettcorn/remote-monitor/total)](https://github.com/garrettcorn/remote-monitor/releases)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/garrettcorn/remote-monitor)](go.mod)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Dashboard](https://img.shields.io/badge/dashboard-live-0a84ff?logo=githubpages&logoColor=white)](https://garrettcorn.github.io/remote-monitor/)
+
+**🌐 Live dashboard: [garrettcorn.github.io/remote-monitor](https://garrettcorn.github.io/remote-monitor/)**
+
 A lightweight, cross-platform system monitor and real-time dashboard powered by **Go**, **Tailcat** peer-to-point WireGuard networking, and a static web client designed to be hosted directly on **GitHub Pages**.
 
 ---
