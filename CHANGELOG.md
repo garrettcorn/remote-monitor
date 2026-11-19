@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-11-19
+
+### Changed
+- Replace the button editor's action dropdown with App, Shortcut, Media & system, Text and Website tabs ([`94cd3cb`](https://github.com/garrettcorn/remote-monitor/commit/94cd3cb))
+- Light up the mute and mic-mute buttons while muted ([`94cd3cb`](https://github.com/garrettcorn/remote-monitor/commit/94cd3cb))
+
+### Added
+- Add a searchable picker of apps installed on the host for launch buttons ([`94cd3cb`](https://github.com/garrettcorn/remote-monitor/commit/94cd3cb))
+- Add a searchable library of common keyboard shortcuts that adapts to the host's OS ([`94cd3cb`](https://github.com/garrettcorn/remote-monitor/commit/94cd3cb))
+- Add text-snippet buttons that type saved text on the host ([`94cd3cb`](https://github.com/garrettcorn/remote-monitor/commit/94cd3cb))
+- Add Lock and Sleep to the power controls ([`94cd3cb`](https://github.com/garrettcorn/remote-monitor/commit/94cd3cb))
+- Add a custom colour wheel for button colours ([`94cd3cb`](https://github.com/garrettcorn/remote-monitor/commit/94cd3cb))
+
 ## [1.4.0] - 2026-11-19
 
 ### Changed
@@ -110,6 +123,8 @@ All notable changes to this project will be documented in this file.
 - Add multi-server fleet management supporting simultaneous monitoring and live server switching in localStorage (#1)
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
+
+[1.5.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.5.0
 
 [1.4.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.4.0
 
