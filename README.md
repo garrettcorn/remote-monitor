@@ -47,19 +47,19 @@ When the server starts, it automatically outputs:
 .\pc_monitor_server.exe
 
 # Or specify a friendly name and your GitHub Pages client URL:
-.\pc_monitor_server.exe -name "GamingPC" -web-url "https://<your-username>.github.io/pc_monitor/"
+.\pc_monitor_server.exe -name "GamingPC" -web-url "https://garrettcorn.github.io/remote-monitor/"
 ```
 
 #### On Linux:
 ```bash
 chmod +x pc_monitor_linux_amd64
-./pc_monitor_linux_amd64 -name "LinuxServer" -web-url "https://<your-username>.github.io/pc_monitor/"
+./pc_monitor_linux_amd64 -name "LinuxServer" -web-url "https://garrettcorn.github.io/remote-monitor/"
 ```
 
 #### On macOS:
 ```bash
 chmod +x pc_monitor_darwin_arm64
-./pc_monitor_darwin_arm64 -name "MacBookPro" -web-url "https://<your-username>.github.io/pc_monitor/"
+./pc_monitor_darwin_arm64 -name "MacBookPro" -web-url "https://garrettcorn.github.io/remote-monitor/"
 ```
 
 #### On Android (Termux):
@@ -169,18 +169,16 @@ The script validates the changelog, runs tests, creates the Git tag `v1.1.0`, an
 
 1. Push this repository to GitHub:
    ```bash
-   git init
-   git add .
-   git commit -m "Initial commit of PC Monitor"
-   git remote add origin https://github.com/<your-username>/pc_monitor.git
-   git push -u origin main
+   git remote add origin https://github.com/garrettcorn/remote-monitor.git
+   git branch -M main
+   git push -u origin main --tags
    ```
 2. Enable GitHub Pages:
-   - Go to your repository **Settings** ➔ **Pages**.
+   - In GitHub, go to repository **Settings** ➔ **Pages**.
    - Under **Build and deployment**, select **Source: GitHub Actions**.
-3. The included GitHub Actions workflow (`.github/workflows/deploy.yml`) will automatically deploy the `/web` directory to:
+3. The included workflow (`.github/workflows/deploy-pages.yml`) will automatically deploy the `/web` directory to:
    ```
-   https://<your-username>.github.io/pc_monitor/
+   https://garrettcorn.github.io/remote-monitor/
    ```
 
 ---

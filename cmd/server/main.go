@@ -30,7 +30,7 @@ func main() {
 	serverName := flag.String("name", defaultHostname, "Friendly name for this server in the dashboard")
 	directPort := flag.Int("port", 9120, "Direct HTTP/WebSocket port for LAN/Tailscale IP access (0 to disable)")
 	tcPort := flag.Int("tc-port", 8080, "Tailcat tunnel port")
-	webURL := flag.String("web-url", "https://your-username.github.io/pc_monitor/", "URL of the GitHub Pages dashboard")
+	webURL := flag.String("web-url", "https://garrettcorn.github.io/remote-monitor/", "URL of the GitHub Pages dashboard")
 	tokenFlag := flag.String("token", "", "Pairing authentication token (auto-generated if empty)")
 	noTailcat := flag.Bool("no-tailcat", false, "Disable Tailcat tunnel (run in direct LAN mode only)")
 	exportHTML := flag.String("export-html", "pairing_card.html", "Path to save scannable pairing HTML card")

@@ -33,7 +33,7 @@ func GenerateToken(length int) (string, error) {
 // BuildPairingURL constructs the hash fragment URL for the GitHub Pages web client.
 func BuildPairingURL(baseWebURL, serverName, tailcatAddr, token string, tailcatPort, directPort int, localIPs []string) string {
 	if baseWebURL == "" {
-		baseWebURL = "https://your-username.github.io/pc_monitor/"
+		baseWebURL = "https://garrettcorn.github.io/remote-monitor/"
 	}
 
 	directURL := ""

@@ -266,7 +266,7 @@ func bumpVersion(path, newVer string) error {
 	}
 
 	// Add link definition at bottom
-	repoURL := "https://github.com/your-username/pc_monitor"
+	repoURL := "https://github.com/garrettcorn/remote-monitor"
 	linkLine := fmt.Sprintf("[%s]: %s/releases/tag/v%s", newVer, repoURL, newVer)
 	newLines = append(newLines, linkLine)
 

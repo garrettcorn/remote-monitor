@@ -15,4 +15,4 @@ All notable changes to this project will be documented in this file.
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
 
-[1.0.0]: https://github.com/your-username/pc_monitor/releases/tag/v1.0.0
+[1.0.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.0.0
