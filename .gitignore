@@ -1,0 +1,13 @@
+# Binaries
+*.exe
+pc_monitor_server
+dist/
+
+# Session credentials
+pairing_info.json
+pairing_card.html
+*.key
+
+# Logs & temp
+*.log
+*.tmp

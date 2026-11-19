@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#090d16">
+  <title>PC Monitor — System Telemetry & Multi-Server Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="brand">
+      <img src="favicon.svg" alt="Logo" class="brand-logo">
+      <span class="brand-name">PC Monitor</span>
+      <span class="brand-badge">Tailcat P2P</span>
+    </div>
+
+    <div class="header-center">
+      <div class="server-selector-box">
+        <select id="server-select" class="server-select" title="Switch Server"></select>
+      </div>
+
+      <nav class="view-nav">
+        <button id="btn-nav-dashboard" class="nav-tab nav-active">Dashboard</button>
+        <button id="btn-nav-fleet" class="nav-tab">Fleet Overview</button>
+      </nav>
+    </div>
+
+    <div class="header-actions">
+      <div class="status-pill">
+        <span id="header-status-dot" class="status-dot dot-connecting"></span>
+        <span id="header-status-text">Connecting...</span>
+      </div>
+      <button id="btn-pair-modal" class="btn btn-primary btn-sm">➕ Pair Server</button>
+    </div>
+  </header>
+
+  <main class="main-container">
+
+    <!-- ================= VIEW 1: DETAILED SERVER DASHBOARD ================= -->
+    <div id="view-dashboard">
+      <!-- System Summary Bar -->
+      <section class="system-summary-bar">
+        <div class="system-meta-list">
+          <div class="meta-item">
+            <span class="meta-label">Hostname</span>
+            <span id="host-name" class="meta-val">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Operating System</span>
+            <span id="host-os" class="meta-val">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Uptime</span>
+            <span id="host-uptime" class="meta-val">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Kernel / Arch</span>
+            <span id="host-kernel" class="meta-val">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Processes</span>
+            <span id="host-procs" class="meta-val">--</span>
+          </div>
+        </div>
+        <div>
+          <button id="btn-delete-server" class="btn btn-danger btn-sm" title="Unpair this server">Unpair</button>
+        </div>
+      </section>
+
+      <!-- Row 1: Hero Metrics (CPU, Memory, Network, Temps) -->
+      <section class="grid-hero">
+        <!-- CPU Card -->
+        <div class="metric-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Processor (CPU)</div>
+              <div id="cpu-model" class="sub-text">Loading CPU info...</div>
+            </div>
+            <div id="cpu-cores" class="badge">-- Cores</div>
+          </div>
+          <div class="gauge-box">
+            <div class="gauge-svg-container">
+              <svg class="gauge-svg" viewBox="0 0 80 80">
+                <circle class="gauge-bg" cx="40" cy="40" r="36"></circle>
+                <circle id="cpu-gauge-circle" class="gauge-circle circle-cyan" cx="40" cy="40" r="36"></circle>
+              </svg>
+              <div id="cpu-pct" class="gauge-center-text">0%</div>
+            </div>
+            <div class="gauge-info">
+              <span class="sub-text">Clock Frequency</span>
+              <span id="cpu-freq" class="gauge-stat-big">-- GHz</span>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="chart-cpu" class="chart-canvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Memory Card -->
+        <div class="metric-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Memory (RAM)</div>
+              <div id="mem-avail-sub" class="sub-text">Available: <span id="mem-avail">--</span></div>
+            </div>
+            <div id="mem-total" class="badge">-- GB Total</div>
+          </div>
+          <div class="gauge-box">
+            <div class="gauge-svg-container">
+              <svg class="gauge-svg" viewBox="0 0 80 80">
+                <circle class="gauge-bg" cx="40" cy="40" r="36"></circle>
+                <circle id="mem-gauge-circle" class="gauge-circle circle-purple" cx="40" cy="40" r="36"></circle>
+              </svg>
+              <div id="mem-pct" class="gauge-center-text">0%</div>
+            </div>
+            <div class="gauge-info">
+              <span class="sub-text">Used RAM</span>
+              <span id="mem-used" class="gauge-stat-big">-- GB</span>
+              <span class="sub-text">Swap: <span id="swap-used">--</span> / <span id="swap-total">--</span> (<span id="swap-pct">0%</span>)</span>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="chart-mem" class="chart-canvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Network Card -->
+        <div class="metric-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Network Activity</div>
+              <div class="sub-text">Total Recv: <span id="net-total-recv">--</span> • Sent: <span id="net-total-sent">--</span></div>
+            </div>
+          </div>
+          <div class="gauge-box" style="margin-bottom: 8px;">
+            <div class="gauge-info">
+              <span class="sub-text">⬇️ Download Rate</span>
+              <span id="net-down" class="gauge-stat-big" style="color: var(--green);">0 B/s</span>
+            </div>
+            <div class="gauge-info" style="margin-left: auto;">
+              <span class="sub-text">⬆️ Upload Rate</span>
+              <span id="net-up" class="gauge-stat-big" style="color: var(--orange);">0 B/s</span>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="chart-net-down" class="chart-canvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Temperatures Card -->
+        <div class="metric-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Thermals & Sensors</div>
+              <div class="sub-text">Hardware temperature probes</div>
+            </div>
+          </div>
+          <div id="temp-list-container" class="temp-list">
+            <div class="sub-text">Awaiting telemetry...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Row 2: Per-Core CPU Load & GPU Cards -->
+      <section class="grid-two-col">
+        <!-- Per-core load -->
+        <div class="metric-card">
+          <div class="card-header">
+            <div class="card-title">Per-Core CPU Utilization</div>
+          </div>
+          <div id="core-bars-container" class="core-bars-grid">
+            <div class="sub-text">Loading cores...</div>
+          </div>
+        </div>
+
+        <!-- Dedicated Graphics (GPU) -->
+        <div class="metric-card">
+          <div class="card-header">
+            <div class="card-title">Graphics Hardware (GPU)</div>
+          </div>
+          <div id="gpu-cards-container">
+            <div class="sub-text">Detecting graphics adapters...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Row 3: Drives & Storage -->
+      <section class="metric-card" style="margin-bottom: 24px;">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Storage & Disk Partitions</div>
+            <div class="sub-text">Volume space and mountpoint capacities</div>
+          </div>
+        </div>
+        <div id="drives-container" class="drives-list">
+          <div class="sub-text">Scanning storage volumes...</div>
+        </div>
+      </section>
+
+      <!-- Row 4: Network Adapters & IP Addresses -->
+      <section class="metric-card" style="margin-bottom: 24px;">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Network Adapters & IP Configuration</div>
+            <div class="sub-text">Active interfaces, IPv4, IPv6, and MAC addresses</div>
+          </div>
+        </div>
+        <div id="ifaces-container" class="ifaces-grid">
+          <div class="sub-text">Scanning network interfaces...</div>
+        </div>
+      </section>
+
+      <!-- Row 5: Top Processes -->
+      <section class="metric-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Top Active Processes</div>
+            <div class="sub-text">Ranked by memory and execution footprint</div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="proc-table">
+            <thead>
+              <tr>
+                <th style="width: 80px;">PID</th>
+                <th>Process Name</th>
+                <th style="width: 120px;">CPU %</th>
+                <th style="width: 140px;">Memory</th>
+              </tr>
+            </thead>
+            <tbody id="process-table-body">
+              <tr><td colspan="4" class="text-center sub-text">Polling process telemetry...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= VIEW 2: MULTI-SERVER FLEET OVERVIEW ================= -->
+    <div id="view-fleet" class="hidden">
+      <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h2>Multi-Server Fleet Overview</h2>
+          <div class="sub-text">Monitor all of your paired machines in real time at a single glance.</div>
+        </div>
+        <button class="btn btn-primary" onclick="app.openPairModal()">➕ Pair Another Server</button>
+      </div>
+
+      <div id="fleet-grid-container" class="fleet-grid">
+        <!-- Rendered dynamically by UI.renderFleetOverview -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================= PAIR NEW SERVER MODAL ================= -->
+  <div id="pair-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">Pair New Server</div>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+
+      <!-- Live Camera Scanner Box (Toggled on demand) -->
+      <div id="camera-scanner-box" class="hidden">
+        <div class="scanner-video-box">
+          <video id="qr-video" playsinline></video>
+          <div class="scanner-reticle"></div>
+        </div>
+        <div style="text-align: center; margin-bottom: 16px;">
+          <button id="btn-stop-scanner" type="button" class="btn btn-outline btn-sm">Cancel Camera</button>
+        </div>
+      </div>
+
+      <form id="pair-form">
+        <div style="margin-bottom: 16px; text-align: center;">
+          <button id="btn-start-scanner" type="button" class="btn btn-outline btn-block">
+            📷 Scan Terminal QR Code with Camera
+          </button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+          <div style="flex: 1; height: 1px; background: var(--border);"></div>
+          <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">or paste manually</span>
+          <div style="flex: 1; height: 1px; background: var(--border);"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="input-pairing-code">Pairing Link, Tailcat Address, or Direct IP</label>
+          <textarea id="input-pairing-code" class="form-input" rows="3" placeholder="Paste: https://...#name=Server&tc=tc1...&token=...&#10;or: tc1...&#10;or: http://192.168.1.50:9120" required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="input-server-name">Custom Server Nickname (optional)</label>
+          <input type="text" id="input-server-name" class="form-input" placeholder="e.g. Workstation, Home Server, Mac Mini">
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 24px;">
+          <button type="button" class="btn btn-outline modal-close-btn" style="flex: 1;">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="flex: 2;">Pair & Connect</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main JavaScript App -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
