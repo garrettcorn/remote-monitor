@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-11-19
+
+### Changed
+- **Breaking:** require a one-time 4-digit PIN, shown on the server console, for dashboards to connect when remote control is enabled (the default); use `-read-only` to keep PIN-free monitoring ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+- Restyle the dashboard with a Liquid Glass theme supporting light and dark appearance ([`ebc806f`](https://github.com/garrettcorn/remote-monitor/commit/ebc806f))
+- Escape host-provided names (processes, devices, drives) before rendering them in the dashboard ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+
+### Added
+- Add remote audio control for output/input device selection, volume and mute ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+- Add remote shutdown and restart with confirmation in the dashboard ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+- Add `-read-only` flag to disable remote control ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+- Add drive health, with SMART temperature, wear, power-on hours and error counts when the server runs elevated ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+- Add a connected devices list for USB, Bluetooth and display devices ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+- Add per-drive read/write speed and active time, and per-adapter rates and link speed ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+- Add GPU fan speed, core/memory clocks and power limit ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+- Add battery status and signed-in users ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+- Add status badges and a live dashboard link to the README ([`8dc2ccf`](https://github.com/garrettcorn/remote-monitor/commit/8dc2ccf))
+
+### Removed
+- Remove the fabricated placeholder drive reported on unsupported platforms ([`85f231b`](https://github.com/garrettcorn/remote-monitor/commit/85f231b))
+
+### Fixed
+- Fix the dashboard background flickering ([`609d316`](https://github.com/garrettcorn/remote-monitor/commit/609d316), [`d4d8687`](https://github.com/garrettcorn/remote-monitor/commit/d4d8687))
+
 ## [1.1.0] - 2026-11-19
 
 ### Changed
@@ -38,6 +62,8 @@ All notable changes to this project will be documented in this file.
 - Add multi-server fleet management supporting simultaneous monitoring and live server switching in localStorage (#1)
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
+
+[1.2.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.2.0
 
 [1.1.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.1.0
 
