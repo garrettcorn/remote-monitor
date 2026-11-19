@@ -134,49 +134,21 @@ h2 {
 /* ---------------------------------------------------------------------
    Ambient colour field (gives the glass something to refract)
    --------------------------------------------------------------------- */
+/* Static radial gradients: no blur filter and no animation, so the
+   glass above never has to re-render its backdrop (which flickers). */
 .ambient {
   position: fixed;
   inset: 0;
   z-index: -1;
-  overflow: hidden;
   pointer-events: none;
+  background:
+    radial-gradient(ellipse 55vmax 50vmax at 8% 4%, var(--blob-a), transparent 70%),
+    radial-gradient(ellipse 45vmax 42vmax at 96% 32%, var(--blob-b), transparent 70%),
+    radial-gradient(ellipse 42vmax 38vmax at 38% 104%, var(--blob-c), transparent 70%),
+    radial-gradient(ellipse 30vmax 28vmax at 86% 96%, var(--blob-d), transparent 70%);
 }
 
-.ambient span {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  will-change: transform;
-}
-
-.ambient span:nth-child(1) {
-  width: 55vmax; height: 55vmax;
-  left: -15vmax; top: -20vmax;
-  background: var(--blob-a);
-  animation: drift-a 28s ease-in-out infinite alternate;
-}
-.ambient span:nth-child(2) {
-  width: 45vmax; height: 45vmax;
-  right: -12vmax; top: 10vmax;
-  background: var(--blob-b);
-  animation: drift-b 34s ease-in-out infinite alternate;
-}
-.ambient span:nth-child(3) {
-  width: 40vmax; height: 40vmax;
-  left: 20vmax; bottom: -18vmax;
-  background: var(--blob-c);
-  animation: drift-c 31s ease-in-out infinite alternate;
-}
-.ambient span:nth-child(4) {
-  width: 28vmax; height: 28vmax;
-  right: 10vmax; bottom: -6vmax;
-  background: var(--blob-d);
-  animation: drift-a 40s ease-in-out infinite alternate-reverse;
-}
-
-@keyframes drift-a { to { transform: translate(12vmax, 8vmax) scale(1.08); } }
-@keyframes drift-b { to { transform: translate(-10vmax, 14vmax) scale(0.92); } }
-@keyframes drift-c { to { transform: translate(8vmax, -12vmax) scale(1.12); } }
+.ambient span { display: none; }
 
 /* ---------------------------------------------------------------------
    Glass material (shared by every top-level surface)
@@ -1272,7 +1244,6 @@ section.metric-card { margin-bottom: 18px !important; }
    Accessibility fallbacks
    --------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  .ambient span { animation: none; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
