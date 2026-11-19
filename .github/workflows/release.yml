@@ -57,7 +57,7 @@ jobs:
 
       - name: Extract Release Notes
         run: |
-          go run ./cmd/changelog extract "${VERSION}" -o release_notes.md
+          go run ./cmd/changelog extract -o release_notes.md "${VERSION}"
           echo "=== RELEASE NOTES ==="
           cat release_notes.md
 
