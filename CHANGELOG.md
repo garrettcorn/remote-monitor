@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-11-19
+
+### Changed
+- Connect automatically once the 4-digit PIN is entered in the dashboard ([`a1cb90e`](https://github.com/garrettcorn/remote-monitor/commit/a1cb90e))
+
+### Added
+- Report whether the server runs as administrator/root (`server_elevated`) ([`2dd0ff2`](https://github.com/garrettcorn/remote-monitor/commit/2dd0ff2))
+
+### Fixed
+- Fix the drive health admin note showing on elevated servers whose drives don't report SMART details ([`2dd0ff2`](https://github.com/garrettcorn/remote-monitor/commit/2dd0ff2))
+
 ## [1.3.0] - 2026-11-19
 
 ### Changed
@@ -88,6 +99,8 @@ All notable changes to this project will be documented in this file.
 - Add multi-server fleet management supporting simultaneous monitoring and live server switching in localStorage (#1)
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
+
+[1.3.1]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.3.1
 
 [1.3.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.3.0
 
