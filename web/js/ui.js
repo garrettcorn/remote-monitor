@@ -136,11 +136,13 @@ export const UI = {
     this.renderProcesses(snap.top_processes);
 
     // 10. Drive health / SMART and connected devices
-    this.renderDiskHealth(snap.physical_disks, snap.smart_details_available);
+    this.renderDiskHealth(snap.physical_disks, snap.smart_details_available, snap.server_elevated);
     this.renderDevices(snap.devices);
   },
 
-  renderDiskHealth(disks = [], smartDetails = false) {
+  // elevated: whether the server runs as admin/root (undefined on servers
+  // older than v1.3.1, where we fall back to "no drive returned details").
+  renderDiskHealth(disks = [], smartDetails = false, elevated) {
     const container = document.getElementById('disk-health-container');
     if (!container) return;
     if (!disks || disks.length === 0) {
@@ -167,7 +169,8 @@ export const UI = {
           <div class="temp-badge ${healthClass(d.health)}">${esc(d.health)}</div>
         </div>`;
     });
-    if (!smartDetails) {
+    const needsElevation = elevated === undefined ? !smartDetails : !elevated;
+    if (needsElevation) {
       html += '<div class="sub-text smart-note">Temperature, wear and error counts need the server to run as administrator (or root with smartctl on Linux).</div>';
     }
     container.innerHTML = html;

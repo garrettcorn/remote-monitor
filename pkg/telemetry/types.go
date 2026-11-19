@@ -18,7 +18,8 @@ type SystemSnapshot struct {
 	Network      NetworkInfo       `json:"network"`
 	TopProcesses []ProcessInfo     `json:"top_processes"`
 	Disks        []PhysicalDisk    `json:"physical_disks"`
-	SMARTDetails bool              `json:"smart_details_available"` // false when detailed counters need elevation
+	SMARTDetails bool              `json:"smart_details_available"` // any drive returned detailed SMART counters
+	Elevated     bool              `json:"server_elevated"`         // server runs as administrator (Windows) / root
 	Devices      []ConnectedDevice `json:"devices"`
 	Audio        *audio.State      `json:"audio,omitempty"`
 	Battery      *BatteryInfo      `json:"battery,omitempty"`

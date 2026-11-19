@@ -172,6 +172,7 @@ func (c *Collector) collect() {
 	}
 	snap.Disks = c.slow.disks
 	snap.SMARTDetails = c.slow.smartDetails
+	snap.Elevated = serverElevated
 	snap.Devices = c.slow.devices
 	snap.Users = c.slow.users
 	c.slowMu.Unlock()
