@@ -2,9 +2,8 @@
 
 export class SparklineChart {
   constructor(canvasId, options = {}) {
-    this.canvas = document.getElementById(canvasId);
-    if (!this.canvas) return;
-    this.ctx = this.canvas.getContext('2d');
+    // Set up state before the canvas check so push()/clear() stay safe
+    // even when the canvas element is missing from the page.
     this.options = {
       maxPoints: options.maxPoints || 60,
       color: options.color || '#38bdf8',
@@ -16,6 +15,10 @@ export class SparklineChart {
       ...options,
     };
     this.data = [];
+
+    this.canvas = document.getElementById(canvasId);
+    if (!this.canvas) return;
+    this.ctx = this.canvas.getContext('2d');
 
     // Handle high DPI displays
     this.resize();

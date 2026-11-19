@@ -264,13 +264,30 @@ func (c *Collector) collectNetwork(now time.Time) NetworkInfo {
 		}
 
 		// Keep only interfaces that have IP addresses or are active
-		if len(ni.IPv4) > 0 || len(ni.IPv6) > 0 || ni.IsUp {
-			netInfo.Interfaces = append(netInfo.Interfaces, ni)
+		if !(len(ni.IPv4) > 0 || len(ni.IPv6) > 0 || ni.IsUp) {
+			continue
 		}
+
+		// Read byte counters via GetIfEntry2Ex (MIB_IF_ROW2)
+		row := windows.MibIfRow2{InterfaceIndex: uint32(iface.Index)}
+		if err := windows.GetIfEntry2Ex(windows.MibIfEntryNormal, &row); err == nil {
+			ni.BytesRecv = row.InOctets
+			ni.BytesSent = row.OutOctets
+			if prev, ok := c.prevNetTimes.ifaceRecv[ni.Name]; ok && ni.BytesRecv >= prev {
+				ni.SpeedRecv = uint64(float64(ni.BytesRecv-prev) / elapsed)
+			}
+			if prev, ok := c.prevNetTimes.ifaceSent[ni.Name]; ok && ni.BytesSent >= prev {
+				ni.SpeedSent = uint64(float64(ni.BytesSent-prev) / elapsed)
+			}
+			c.prevNetTimes.ifaceRecv[ni.Name] = ni.BytesRecv
+			c.prevNetTimes.ifaceSent[ni.Name] = ni.BytesSent
+			totalRecv += ni.BytesRecv
+			totalSent += ni.BytesSent
+		}
+
+		netInfo.Interfaces = append(netInfo.Interfaces, ni)
 	}
 
-	// Read interface stats from windows GetIfTable2 / MIB
-	// Fallback/Approximation: track active traffic
 	netInfo.TotalBytesRecv = totalRecv
 	netInfo.TotalBytesSent = totalSent
 

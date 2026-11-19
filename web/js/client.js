@@ -78,13 +78,19 @@ export class MonitorClient {
       };
 
       this.ws.onmessage = (event) => {
+        let snapshot;
         try {
-          const snapshot = JSON.parse(event.data);
+          snapshot = JSON.parse(event.data);
+        } catch (e) {
+          console.warn('Failed to parse snapshot JSON:', e);
+          return;
+        }
+        try {
           if (this.onSnapshotCallback) {
             this.onSnapshotCallback(snapshot);
           }
         } catch (e) {
-          console.warn('Failed to parse snapshot JSON:', e);
+          console.error('Failed to render snapshot:', e);
         }
       };
 
