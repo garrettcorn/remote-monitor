@@ -1,5 +1,10 @@
 // UI Renderer for dashboard widgets, gauges, drives, and process tables.
 
+const ICONS = {
+  drive: '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5" width="15" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="10" r="1.2" fill="currentColor"/><path d="M5.5 10h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  thermo: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 4a2 2 0 1 1 4 0v7.3a3.5 3.5 0 1 1-4 0z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="10" cy="14" r="1.6" fill="currentColor"/><path d="M10 13V7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+};
+
 export const UI = {
   formatBytes(bytes, decimals = 1) {
     if (!bytes || bytes === 0) return '0 B';
@@ -137,9 +142,7 @@ export const UI = {
 
     if (!gpus || gpus.length === 0) {
       container.innerHTML = `
-        <div class="empty-state">
-          <span class="icon">🎮</span> No dedicated GPU metrics detected.
-        </div>`;
+        <div class="empty-state">No dedicated GPU metrics detected.</div>`;
       return;
     }
 
@@ -196,7 +199,7 @@ export const UI = {
       html += `
         <div class="temp-item">
           <div class="temp-label">
-            <span class="temp-icon">🌡️</span>
+            <span class="temp-icon">${ICONS.thermo}</span>
             <span>${s.label}</span>
           </div>
           <div class="temp-badge ${colorClass}">${temp.toFixed(1)}°C</div>
@@ -225,7 +228,7 @@ export const UI = {
       html += `
         <div class="drive-card">
           <div class="drive-header">
-            <div class="drive-icon">💾</div>
+            <div class="drive-icon">${ICONS.drive}</div>
             <div class="drive-title-box">
               <div class="drive-name">${d.device} (${d.mountpoint})</div>
               <div class="sub-text">${d.filesystem} • Free: ${this.formatBytes(d.free_bytes)} of ${this.formatBytes(d.total_bytes)}</div>

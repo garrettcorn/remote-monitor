@@ -25,10 +25,10 @@ class App {
 
   initCharts() {
     this.charts = {
-      cpu: new SparklineChart('chart-cpu', { color: '#38bdf8', fillColor: 'rgba(56, 189, 248, 0.2)', maxPoints: 60 }),
-      mem: new SparklineChart('chart-mem', { color: '#a855f7', fillColor: 'rgba(168, 85, 247, 0.2)', maxPoints: 60 }),
-      netDown: new SparklineChart('chart-net-down', { color: '#22c55e', fillColor: 'rgba(34, 197, 94, 0.2)', autoScale: true, maxPoints: 60 }),
-      netUp: new SparklineChart('chart-net-up', { color: '#f97316', fillColor: 'rgba(249, 115, 22, 0.2)', autoScale: true, maxPoints: 60 }),
+      cpu: new SparklineChart('chart-cpu', { color: '#0a84ff', fillColor: 'rgba(10, 132, 255, 0.28)', maxPoints: 60 }),
+      mem: new SparklineChart('chart-mem', { color: '#bf5af2', fillColor: 'rgba(191, 90, 242, 0.28)', maxPoints: 60 }),
+      netDown: new SparklineChart('chart-net-down', { color: '#30d158', fillColor: 'rgba(48, 209, 88, 0.28)', autoScale: true, maxPoints: 60 }),
+      netUp: new SparklineChart('chart-net-up', { color: '#ff9f0a', fillColor: 'rgba(255, 159, 10, 0.28)', autoScale: true, maxPoints: 60 }),
     };
   }
 
