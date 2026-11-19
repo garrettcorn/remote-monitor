@@ -226,47 +226,38 @@ func collectTemperatures(gpus []GPUInfo) []TempSensor {
 			})
 		}
 	}
-	if len(sensors) == 0 {
-		sensors = append(sensors, TempSensor{
-			Label:        "SOC Thermal Zone",
-			SensorType:   "cpu",
-			TemperatureC: 42.0,
-			MaxC:         95,
-			CriticalC:    105,
-		})
-	}
 	return sensors
 }
 
-func collectTopProcesses() []ProcessInfo {
-	var procs []ProcessInfo
-	cmd := exec.Command("ps", "-arcwwwxo", "pid,%cpu,%mem,comm")
-	if out, err := cmd.Output(); err == nil {
-		scanner := bufio.NewScanner(bytes.NewReader(out))
-		header := true
-		count := 0
-		for scanner.Scan() && count < 10 {
-			if header {
-				header = false
-				continue
-			}
-			fields := strings.Fields(scanner.Text())
-			if len(fields) >= 4 {
-				pid, _ := strconv.Atoi(fields[0])
-				cpu, _ := strconv.ParseFloat(fields[1], 64)
-				mem, _ := strconv.ParseFloat(fields[2], 64)
-				name := fields[3]
-				procs = append(procs, ProcessInfo{
-					PID:           pid,
-					Name:          name,
-					CPUPercent:    cpu,
-					MemoryPercent: mem,
-				})
-				count++
-			}
-		}
+func (c *Collector) collectProcesses(now time.Time, totalMem uint64) ([]ProcessInfo, int) {
+	out, err := exec.Command("ps", "-arcwwwxo", "pid,%cpu,%mem,rss,comm").Output()
+	if err != nil {
+		return nil, 0
 	}
-	return procs
+	return parsePS(out)
+}
+
+// systemUptime derives uptime from kern.boottime, e.g.
+// "{ sec = 1731990000, usec = 123456 } Tue Nov 19 ...".
+func systemUptime() (time.Duration, bool) {
+	out, err := exec.Command("sysctl", "-n", "kern.boottime").Output()
+	if err != nil {
+		return 0, false
+	}
+	s := string(out)
+	i := strings.Index(s, "sec = ")
+	if i < 0 {
+		return 0, false
+	}
+	s = s[i+len("sec = "):]
+	if j := strings.IndexAny(s, ", }"); j >= 0 {
+		s = s[:j]
+	}
+	sec, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return time.Since(time.Unix(sec, 0)), true
 }
 
 func getOSVersion() string {

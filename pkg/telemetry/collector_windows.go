@@ -9,9 +9,10 @@ import (
 	"net"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
-	"syscall"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -98,21 +99,69 @@ func (c *Collector) collectCPU(now time.Time) CPUInfo {
 		c.prevCPUTimes.timestamp = now
 	}
 
-	// Generate per-core estimates based on overall usage
-	info.CoreUsages = make([]float64, info.LogicalCores)
-	for i := range info.CoreUsages {
-		variance := (float64((i*17)%15) - 7.0) // slight realistic jitter around overall load
-		coreVal := info.UsagePercent + variance
-		if coreVal < 0 {
-			coreVal = 0
-		}
-		if coreVal > 100 {
-			coreVal = 100
-		}
-		info.CoreUsages[i] = coreVal
-	}
+	info.CoreUsages = c.collectCoreUsages(info.LogicalCores)
 
 	return info
+}
+
+// sysProcPerfInfo mirrors SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION.
+type sysProcPerfInfo struct {
+	IdleTime   int64
+	KernelTime int64 // includes idle time
+	UserTime   int64
+	Reserved1  [2]int64
+	Reserved2  uint32
+}
+
+const systemProcessorPerformanceInformation = 8
+
+// collectCoreUsages computes real per-logical-core utilisation from
+// NtQuerySystemInformation deltas. Returns zeros on the first sample.
+func (c *Collector) collectCoreUsages(n int) []float64 {
+	if n < 1 {
+		return nil
+	}
+	buf := make([]sysProcPerfInfo, n)
+	var retLen uint32
+	size := uint32(len(buf)) * uint32(unsafe.Sizeof(buf[0]))
+	if err := windows.NtQuerySystemInformation(systemProcessorPerformanceInformation, unsafe.Pointer(&buf[0]), size, &retLen); err != nil {
+		return nil
+	}
+	count := int(retLen / uint32(unsafe.Sizeof(buf[0])))
+	if count > n {
+		count = n
+	}
+
+	usages := make([]float64, count)
+	idles := make([]uint64, count)
+	totals := make([]uint64, count)
+	prevIdle, prevTotal := c.prevCPUTimes.coreIdle, c.prevCPUTimes.coreTotal
+	for i := 0; i < count; i++ {
+		idles[i] = uint64(buf[i].IdleTime)
+		totals[i] = uint64(buf[i].KernelTime + buf[i].UserTime)
+		if len(prevTotal) == count && totals[i] > prevTotal[i] {
+			dTotal := totals[i] - prevTotal[i]
+			dIdle := idles[i] - prevIdle[i]
+			if dIdle > dTotal {
+				dIdle = dTotal
+			}
+			usages[i] = float64(dTotal-dIdle) / float64(dTotal) * 100.0
+		}
+	}
+	c.prevCPUTimes.coreIdle = idles
+	c.prevCPUTimes.coreTotal = totals
+	return usages
+}
+
+var procGetTickCount64 = modkernel32.NewProc("GetTickCount64")
+
+// systemUptime returns time since the OS booted (matches Task Manager).
+func systemUptime() (time.Duration, bool) {
+	r, _, _ := procGetTickCount64.Call()
+	if r == 0 {
+		return 0, false
+	}
+	return time.Duration(r) * time.Millisecond, true
 }
 
 func fileTimeToUint64(ft windows.Filetime) uint64 {
@@ -398,68 +447,187 @@ func collectTemperatures(gpus []GPUInfo) []TempSensor {
 		}
 	}
 
-	// Try reading thermal zone temperatures via PowerShell / WMI if available
-	// or provide standard CPU thermal estimate if sensors are inaccessible without admin
-	if len(sensors) == 0 {
-		// Default thermal probe
-		sensors = append(sensors, TempSensor{
-			Label:        "CPU Package (Thermal Zone)",
-			SensorType:   "cpu",
-			TemperatureC: 45.0,
-			MaxC:         85,
-			CriticalC:    100,
-		})
-	}
+	// ACPI thermal zones via the "Thermal Zone Information" perf counter
+	// (no admin rights required). Only real readings are reported.
+	sensors = append(sensors, readThermalZones()...)
 
 	return sensors
 }
 
-func collectTopProcesses() []ProcessInfo {
-	// Simple, robust process sampling using Windows tasklist or snapshot
-	cmd := exec.Command("tasklist", "/FO", "CSV", "/NH")
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	var out bytes.Buffer
-	cmd.Stdout = &out
+var (
+	modpdh                           = windows.NewLazySystemDLL("pdh.dll")
+	procPdhOpenQueryW                = modpdh.NewProc("PdhOpenQueryW")
+	procPdhAddEnglishCounterW        = modpdh.NewProc("PdhAddEnglishCounterW")
+	procPdhCollectQueryData          = modpdh.NewProc("PdhCollectQueryData")
+	procPdhGetFormattedCounterArrayW = modpdh.NewProc("PdhGetFormattedCounterArrayW")
+
+	thermalOnce    sync.Once
+	thermalOK      bool
+	thermalQuery   uintptr
+	thermalCounter uintptr
+)
+
+const (
+	pdhFmtDouble = 0x00000200
+	pdhMoreData  = 0x800007D2
+)
+
+// pdhCounterItem mirrors PDH_FMT_COUNTERVALUE_ITEM_W with a double value (64-bit layout).
+type pdhCounterItem struct {
+	Name    *uint16
+	CStatus uint32
+	_       uint32
+	Value   float64
+}
+
+func initThermalQuery() {
+	if procPdhOpenQueryW.Find() != nil {
+		return
+	}
+	var q uintptr
+	if r, _, _ := procPdhOpenQueryW.Call(0, 0, uintptr(unsafe.Pointer(&q))); r != 0 {
+		return
+	}
+	path, _ := windows.UTF16PtrFromString(`\Thermal Zone Information(*)\Temperature`)
+	var ctr uintptr
+	if r, _, _ := procPdhAddEnglishCounterW.Call(q, uintptr(unsafe.Pointer(path)), 0, uintptr(unsafe.Pointer(&ctr))); r != 0 {
+		return
+	}
+	thermalQuery, thermalCounter, thermalOK = q, ctr, true
+}
+
+func readThermalZones() []TempSensor {
+	thermalOnce.Do(initThermalQuery)
+	if !thermalOK {
+		return nil
+	}
+	if r, _, _ := procPdhCollectQueryData.Call(thermalQuery); r != 0 {
+		return nil
+	}
+	var size, count uint32
+	r, _, _ := procPdhGetFormattedCounterArrayW.Call(thermalCounter, pdhFmtDouble,
+		uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&count)), 0)
+	if uint32(r) != pdhMoreData || size == 0 {
+		return nil
+	}
+	buf := make([]uint64, (size+7)/8) // 8-byte aligned
+	r, _, _ = procPdhGetFormattedCounterArrayW.Call(thermalCounter, pdhFmtDouble,
+		uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&count)), uintptr(unsafe.Pointer(&buf[0])))
+	if r != 0 || count == 0 {
+		return nil
+	}
+
+	var sensors []TempSensor
+	items := unsafe.Slice((*pdhCounterItem)(unsafe.Pointer(&buf[0])), count)
+	for _, it := range items {
+		if it.CStatus > 1 { // PDH_CSTATUS_VALID_DATA / NEW_DATA
+			continue
+		}
+		tempC := it.Value - 273.15 // counter reports Kelvin
+		if tempC <= 0 || tempC >= 130 {
+			continue
+		}
+		zone := windows.UTF16PtrToString(it.Name)
+		if i := strings.LastIndex(zone, "."); i >= 0 {
+			zone = zone[i+1:]
+		}
+		sensors = append(sensors, TempSensor{
+			Label:        "ACPI Thermal Zone " + strings.ToUpper(zone),
+			SensorType:   "motherboard",
+			TemperatureC: tempC,
+			MaxC:         85,
+			CriticalC:    100,
+		})
+	}
+	runtime.KeepAlive(buf)
+	return sensors
+}
+
+var procK32GetProcessMemoryInfo = modkernel32.NewProc("K32GetProcessMemoryInfo")
+
+// processMemoryCounters mirrors PROCESS_MEMORY_COUNTERS.
+type processMemoryCounters struct {
+	cb                         uint32
+	PageFaultCount             uint32
+	PeakWorkingSetSize         uintptr
+	WorkingSetSize             uintptr
+	QuotaPeakPagedPoolUsage    uintptr
+	QuotaPagedPoolUsage        uintptr
+	QuotaPeakNonPagedPoolUsage uintptr
+	QuotaNonPagedPoolUsage     uintptr
+	PagefileUsage              uintptr
+	PeakPagefileUsage          uintptr
+}
+
+// collectProcesses enumerates all processes, computes CPU % from deltas of
+// kernel+user time (normalised to all cores, like Task Manager), and returns
+// the top 10 by CPU then memory, plus the total process count.
+func (c *Collector) collectProcesses(now time.Time, totalMem uint64) ([]ProcessInfo, int) {
+	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return nil, 0
+	}
+	defer windows.CloseHandle(snapshot)
+
+	elapsed := now.Sub(c.prevProcStamp).Seconds()
+	havePrev := c.prevProcTimes != nil && elapsed > 0
+	numCPU := float64(runtime.NumCPU())
+	current := make(map[procKey]uint64)
 
 	var procs []ProcessInfo
-	if err := cmd.Run(); err == nil {
-		r := csv.NewReader(&out)
-		records, err := r.ReadAll()
-		if err == nil {
-			for _, rec := range records {
-				if len(rec) >= 5 {
-					name := rec[0]
-					pid, _ := strconv.Atoi(rec[1])
-					// mem e.g. "15,240 K"
-					memStr := strings.ReplaceAll(rec[4], ",", "")
-					memStr = strings.ReplaceAll(memStr, " K", "")
-					memKB, _ := strconv.ParseUint(strings.TrimSpace(memStr), 10, 64)
-					memBytes := memKB * 1024
+	var entry windows.ProcessEntry32
+	entry.Size = uint32(unsafe.Sizeof(entry))
+	for err = windows.Process32First(snapshot, &entry); err == nil; err = windows.Process32Next(snapshot, &entry) {
+		if entry.ProcessID == 0 { // System Idle Process
+			continue
+		}
+		p := ProcessInfo{
+			PID:  int(entry.ProcessID),
+			Name: windows.UTF16ToString(entry.ExeFile[:]),
+		}
 
-					procs = append(procs, ProcessInfo{
-						PID:         pid,
-						Name:        name,
-						MemoryBytes: memBytes,
-					})
+		h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, entry.ProcessID)
+		if err == nil {
+			var created, exited, kernel, user windows.Filetime
+			if windows.GetProcessTimes(h, &created, &exited, &kernel, &user) == nil {
+				key := procKey{entry.ProcessID, fileTimeToUint64(created)}
+				cpuTime := fileTimeToUint64(kernel) + fileTimeToUint64(user) // 100ns units
+				current[key] = cpuTime
+				if prev, ok := c.prevProcTimes[key]; ok && havePrev && cpuTime >= prev {
+					pct := float64(cpuTime-prev) / (elapsed * 1e7) / numCPU * 100.0
+					if pct > 100 {
+						pct = 100
+					}
+					p.CPUPercent = pct
 				}
 			}
+			var pmc processMemoryCounters
+			pmc.cb = uint32(unsafe.Sizeof(pmc))
+			if r, _, _ := procK32GetProcessMemoryInfo.Call(uintptr(h), uintptr(unsafe.Pointer(&pmc)), uintptr(pmc.cb)); r != 0 {
+				p.MemoryBytes = uint64(pmc.WorkingSetSize)
+				if totalMem > 0 {
+					p.MemoryPercent = float64(p.MemoryBytes) / float64(totalMem) * 100.0
+				}
+			}
+			windows.CloseHandle(h)
 		}
+		procs = append(procs, p)
 	}
 
-	// Keep top 10 by memory
-	if len(procs) > 10 {
-		// Simple bubble sort top 10
-		for i := 0; i < len(procs)-1; i++ {
-			for j := 0; j < len(procs)-i-1; j++ {
-				if procs[j].MemoryBytes < procs[j+1].MemoryBytes {
-					procs[j], procs[j+1] = procs[j+1], procs[j]
-				}
-			}
+	c.prevProcTimes = current
+	c.prevProcStamp = now
+
+	total := len(procs)
+	sort.Slice(procs, func(i, j int) bool {
+		if procs[i].CPUPercent != procs[j].CPUPercent {
+			return procs[i].CPUPercent > procs[j].CPUPercent
 		}
+		return procs[i].MemoryBytes > procs[j].MemoryBytes
+	})
+	if len(procs) > 10 {
 		procs = procs[:10]
 	}
-
-	return procs
+	return procs, total
 }
 
 func getOSVersion() string {

@@ -16,6 +16,16 @@ type Collector struct {
 	prevNetTimes netTimes
 	startTime    time.Time
 	interval     time.Duration
+
+	// Per-process CPU time samples (used by platforms that compute
+	// process CPU % from deltas, e.g. Windows).
+	prevProcTimes map[procKey]uint64
+	prevProcStamp time.Time
+}
+
+type procKey struct {
+	pid     uint32
+	created uint64
 }
 
 type cpuTimes struct {
@@ -87,6 +97,12 @@ func (c *Collector) GetSnapshot() SystemSnapshot {
 func (c *Collector) collect() {
 	now := time.Now()
 
+	// Prefer real OS uptime; fall back to server uptime if unavailable.
+	uptime, ok := systemUptime()
+	if !ok {
+		uptime = now.Sub(c.startTime)
+	}
+
 	snap := SystemSnapshot{
 		Timestamp: now,
 		Host: HostInfo{
@@ -94,8 +110,8 @@ func (c *Collector) collect() {
 			OS:           runtime.GOOS,
 			Architecture: runtime.GOARCH,
 			Kernel:       getKernelVersion(),
-			UptimeSec:    uint64(time.Since(c.startTime).Seconds()),
-			BootTime:     c.startTime.Format(time.RFC3339),
+			UptimeSec:    uint64(uptime.Seconds()),
+			BootTime:     now.Add(-uptime).Format(time.RFC3339),
 			ServerTime:   now.Format("15:04:05 MST"),
 		},
 	}
@@ -108,8 +124,7 @@ func (c *Collector) collect() {
 	snap.Network = c.collectNetwork(now)
 	snap.GPUs = collectGPUs()
 	snap.Temperatures = collectTemperatures(snap.GPUs)
-	snap.TopProcesses = collectTopProcesses()
-	snap.Host.ProcessCount = len(snap.TopProcesses)
+	snap.TopProcesses, snap.Host.ProcessCount = c.collectProcesses(now, snap.Memory.TotalBytes)
 
 	c.mu.Lock()
 	c.lastSnapshot = snap

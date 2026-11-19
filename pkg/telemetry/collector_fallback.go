@@ -86,19 +86,17 @@ func collectGPUs() []GPUInfo {
 }
 
 func collectTemperatures(gpus []GPUInfo) []TempSensor {
-	return []TempSensor{
-		{
-			Label:        "System Ambient",
-			SensorType:   "ambient",
-			TemperatureC: 38.0,
-			MaxC:         80,
-			CriticalC:    95,
-		},
-	}
+	return []TempSensor{}
 }
 
-func collectTopProcesses() []ProcessInfo {
-	return []ProcessInfo{}
+func (c *Collector) collectProcesses(now time.Time, totalMem uint64) ([]ProcessInfo, int) {
+	return []ProcessInfo{}, 0
+}
+
+// systemUptime is unavailable on unsupported platforms; the caller falls
+// back to server uptime.
+func systemUptime() (time.Duration, bool) {
+	return 0, false
 }
 
 func getOSVersion() string {

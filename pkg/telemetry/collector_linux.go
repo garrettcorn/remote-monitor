@@ -372,37 +372,29 @@ func collectTemperatures(gpus []GPUInfo) []TempSensor {
 	return sensors
 }
 
-func collectTopProcesses() []ProcessInfo {
-	var procs []ProcessInfo
-	cmd := exec.Command("ps", "-eo", "pid,%cpu,%mem,comm", "--sort=-%cpu")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err == nil {
-		scanner := bufio.NewScanner(&out)
-		header := true
-		count := 0
-		for scanner.Scan() && count < 10 {
-			if header {
-				header = false
-				continue
-			}
-			fields := strings.Fields(scanner.Text())
-			if len(fields) >= 4 {
-				pid, _ := strconv.Atoi(fields[0])
-				cpu, _ := strconv.ParseFloat(fields[1], 64)
-				mem, _ := strconv.ParseFloat(fields[2], 64)
-				name := fields[3]
-				procs = append(procs, ProcessInfo{
-					PID:           pid,
-					Name:          name,
-					CPUPercent:    cpu,
-					MemoryPercent: mem,
-				})
-				count++
-			}
-		}
+func (c *Collector) collectProcesses(now time.Time, totalMem uint64) ([]ProcessInfo, int) {
+	out, err := exec.Command("ps", "-eo", "pid,%cpu,%mem,rss,comm", "--sort=-%cpu").Output()
+	if err != nil {
+		return nil, 0
 	}
-	return procs
+	return parsePS(out)
+}
+
+// systemUptime reads the OS uptime from /proc/uptime.
+func systemUptime() (time.Duration, bool) {
+	data, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		return 0, false
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return 0, false
+	}
+	secs, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return 0, false
+	}
+	return time.Duration(secs * float64(time.Second)), true
 }
 
 func getOSVersion() string {
