@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"pc_monitor/pkg/audio"
 )
 
 // Collector gathers and caches system performance telemetry.
@@ -21,7 +23,36 @@ type Collector struct {
 	// process CPU % from deltas, e.g. Windows).
 	prevProcTimes map[procKey]uint64
 	prevProcStamp time.Time
+
+	// Per-disk I/O counters for platforms that compute rates from deltas.
+	prevDisk      map[string]diskSample
+	prevDiskStamp time.Time
+
+	// Audio state; refreshed each tick and immediately after control changes.
+	audioMu sync.Mutex
+	audio   *audio.State
+
+	// Slow-changing data refreshed in the background (see refreshSlow).
+	slowMu      sync.Mutex
+	slow        slowData
+	slowAt      time.Time
+	slowRunning bool
 }
+
+type diskSample struct {
+	readBytes, writeBytes, busyMs uint64
+}
+
+// slowData is expensive to gather (e.g. PowerShell on Windows), so it is
+// refreshed at most every slowInterval, off the sampling path.
+type slowData struct {
+	disks        []PhysicalDisk
+	smartDetails bool
+	devices      []ConnectedDevice
+	users        []UserSession
+}
+
+const slowInterval = 30 * time.Second
 
 type procKey struct {
 	pid     uint32
@@ -120,14 +151,61 @@ func (c *Collector) collect() {
 	snap.Host.OSVersion = getOSVersion()
 	snap.CPU = c.collectCPU(now)
 	snap.Memory = collectMemory()
-	snap.Drives = collectDrives()
+	snap.Drives = c.collectDrives(now)
 	snap.Network = c.collectNetwork(now)
 	snap.GPUs = collectGPUs()
 	snap.Temperatures = collectTemperatures(snap.GPUs)
 	snap.TopProcesses, snap.Host.ProcessCount = c.collectProcesses(now, snap.Memory.TotalBytes)
+	snap.Battery = collectBattery()
+
+	if st, err := audio.Get(); err == nil {
+		c.SetAudio(st)
+	}
+	c.audioMu.Lock()
+	snap.Audio = c.audio
+	c.audioMu.Unlock()
+
+	c.slowMu.Lock()
+	if !c.slowRunning && now.Sub(c.slowAt) >= slowInterval {
+		c.slowRunning = true
+		go c.refreshSlow()
+	}
+	snap.Disks = c.slow.disks
+	snap.SMARTDetails = c.slow.smartDetails
+	snap.Devices = c.slow.devices
+	snap.Users = c.slow.users
+	c.slowMu.Unlock()
 
 	c.mu.Lock()
 	c.lastSnapshot = snap
+	c.mu.Unlock()
+}
+
+// refreshSlow gathers slow-changing data in the background.
+func (c *Collector) refreshSlow() {
+	var d slowData
+	d.disks, d.smartDetails = collectPhysicalDisks()
+	d.devices = collectDevices()
+	d.users = collectUsers()
+
+	c.slowMu.Lock()
+	c.slow = d
+	c.slowAt = time.Now()
+	c.slowRunning = false
+	c.slowMu.Unlock()
+}
+
+// SetAudio stores a fresh audio state (used after control changes so the
+// next snapshot reflects them immediately).
+func (c *Collector) SetAudio(st *audio.State) {
+	c.audioMu.Lock()
+	c.audio = st
+	c.audioMu.Unlock()
+
+	c.mu.Lock()
+	if !c.lastSnapshot.Timestamp.IsZero() {
+		c.lastSnapshot.Audio = st
+	}
 	c.mu.Unlock()
 }
 

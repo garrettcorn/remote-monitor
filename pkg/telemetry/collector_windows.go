@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -203,7 +204,39 @@ func collectMemory() MemoryInfo {
 	}
 }
 
-func collectDrives() []DriveInfo {
+var (
+	diskIOOnce  sync.Once
+	diskIOQuery *pdhQuery
+)
+
+func (c *Collector) collectDrives(now time.Time) []DriveInfo {
+	drives := collectDriveList()
+
+	// Per-volume throughput and busy % from the LogicalDisk perf counters.
+	diskIOOnce.Do(func() {
+		diskIOQuery = openPDH(
+			`\LogicalDisk(*)\Disk Read Bytes/sec`,
+			`\LogicalDisk(*)\Disk Write Bytes/sec`,
+			`\LogicalDisk(*)\% Idle Time`,
+		)
+	})
+	if diskIOQuery.collect() {
+		reads, writes, idle := diskIOQuery.values(0), diskIOQuery.values(1), diskIOQuery.values(2)
+		for i := range drives {
+			inst := drives[i].Device // "C:"
+			drives[i].ReadSpeedBps = uint64(reads[inst])
+			drives[i].WriteSpeedBps = uint64(writes[inst])
+			// Sleeping/stalled drives can report 0% idle with no transfers;
+			// only report busy time while data is actually moving.
+			if v, ok := idle[inst]; ok && drives[i].ReadSpeedBps+drives[i].WriteSpeedBps > 0 {
+				drives[i].BusyPercent = max(0, min(100, 100-v))
+			}
+		}
+	}
+	return drives
+}
+
+func collectDriveList() []DriveInfo {
 	var drives []DriveInfo
 	bitmask, err := windows.GetLogicalDrives()
 	if err != nil {
@@ -322,6 +355,9 @@ func (c *Collector) collectNetwork(now time.Time) NetworkInfo {
 		if err := windows.GetIfEntry2Ex(windows.MibIfEntryNormal, &row); err == nil {
 			ni.BytesRecv = row.InOctets
 			ni.BytesSent = row.OutOctets
+			if row.ReceiveLinkSpeed > 0 && row.ReceiveLinkSpeed != ^uint64(0) {
+				ni.LinkMbps = row.ReceiveLinkSpeed / 1_000_000
+			}
 			if prev, ok := c.prevNetTimes.ifaceRecv[ni.Name]; ok && ni.BytesRecv >= prev {
 				ni.SpeedRecv = uint64(float64(ni.BytesRecv-prev) / elapsed)
 			}
@@ -356,7 +392,8 @@ func collectGPUs() []GPUInfo {
 	var gpus []GPUInfo
 
 	// 1. Try nvidia-smi if available
-	cmd := exec.Command("nvidia-smi", "--query-gpu=index,name,utilization.gpu,memory.total,memory.used,memory.free,temperature.gpu,power.draw", "--format=csv,noheader,nounits")
+	cmd := exec.Command("nvidia-smi", "--query-gpu=index,name,utilization.gpu,memory.total,memory.used,memory.free,temperature.gpu,power.draw,power.limit,fan.speed,clocks.gr,clocks.mem", "--format=csv,noheader,nounits")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err == nil {
@@ -392,12 +429,22 @@ func collectGPUs() []GPUInfo {
 						VRAMPercent:  vramPct,
 						TemperatureC: &temp,
 					}
-					if len(rec) >= 8 {
-						pwr, err := strconv.ParseFloat(strings.TrimSpace(rec[7]), 64)
-						if err == nil {
-							gpu.PowerWatts = &pwr
+					// Optional fields; nvidia-smi reports "[N/A]" when unsupported.
+					optional := func(i int) *float64 {
+						if i >= len(rec) {
+							return nil
 						}
+						v, err := strconv.ParseFloat(strings.TrimSpace(rec[i]), 64)
+						if err != nil {
+							return nil
+						}
+						return &v
 					}
+					gpu.PowerWatts = optional(7)
+					gpu.PowerLimitW = optional(8)
+					gpu.FanSpeed = optional(9)
+					gpu.CoreClockMHz = optional(10)
+					gpu.MemClockMHz = optional(11)
 					gpus = append(gpus, gpu)
 				}
 			}

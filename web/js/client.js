@@ -10,13 +10,17 @@ export class MonitorClient {
     this.tailcatConn = null;
     this.onSnapshotCallback = null;
     this.onStatusCallback = null;
+    this.onAuthRequired = null;
   }
 
-  connect(server, onSnapshot, onStatus) {
+  // onAuthRequired(server) is called when the server asks for a PIN
+  // (session missing or no longer valid); the client stops reconnecting.
+  connect(server, onSnapshot, onStatus, onAuthRequired) {
     this.disconnect();
     this.activeServer = server;
     this.onSnapshotCallback = onSnapshot;
     this.onStatusCallback = onStatus;
+    this.onAuthRequired = onAuthRequired || null;
 
     this.setStatus('connecting');
 
@@ -59,15 +63,40 @@ export class MonitorClient {
     }
   }
 
+  static authQuery(server) {
+    let q = 'token=' + encodeURIComponent(server.token || '');
+    if (server.session) q += '&session=' + encodeURIComponent(server.session);
+    return q;
+  }
+
+  static authHeaders(server) {
+    const h = { 'Accept': 'application/json', 'X-Pairing-Token': server.token || '' };
+    if (server.session) h['X-Session'] = server.session;
+    return h;
+  }
+
+  static baseURL(server) {
+    return (server.directURL || '').replace(/\/+$/, '');
+  }
+
+  // Stop everything and hand off to the PIN prompt.
+  authRequired(server) {
+    this.disconnect();
+    this.activeServer = null;
+    this.setStatus('offline', 'PIN required');
+    if (this.onAuthRequired) this.onAuthRequired(server);
+  }
+
   connectDirect(server) {
     let wsUrl = '';
     const base = server.directURL.replace(/\/+$/, '');
+    const q = '/ws?' + MonitorClient.authQuery(server);
     if (base.startsWith('https://')) {
-      wsUrl = base.replace('https://', 'wss://') + '/ws?token=' + encodeURIComponent(server.token || '');
+      wsUrl = base.replace('https://', 'wss://') + q;
     } else if (base.startsWith('http://')) {
-      wsUrl = base.replace('http://', 'ws://') + '/ws?token=' + encodeURIComponent(server.token || '');
+      wsUrl = base.replace('http://', 'ws://') + q;
     } else {
-      wsUrl = 'ws://' + base + '/ws?token=' + encodeURIComponent(server.token || '');
+      wsUrl = 'ws://' + base + q;
     }
 
     try {
@@ -116,8 +145,15 @@ export class MonitorClient {
 
     const poll = async () => {
       try {
-        const url = `${server.directURL.replace(/\/+$/, '')}/api/telemetry?token=${encodeURIComponent(server.token || '')}`;
+        const url = `${MonitorClient.baseURL(server)}/api/telemetry?${MonitorClient.authQuery(server)}`;
         const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (resp.status === 401) {
+          const body = await resp.json().catch(() => ({}));
+          if (body.error === 'pin_required') {
+            this.authRequired(server);
+            return;
+          }
+        }
         if (!resp.ok) {
           throw new Error(`HTTP ${resp.status}`);
         }
@@ -207,9 +243,52 @@ export class MonitorClient {
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
       if (this.activeServer && this.activeServer.id === server.id) {
-        this.connect(server, this.onSnapshotCallback, this.onStatusCallback);
+        this.connect(server, this.onSnapshotCallback, this.onStatusCallback, this.onAuthRequired);
       }
     }, 3000);
+  }
+
+  // Public health info: { control_enabled, pin_required, ... } or null if unreachable.
+  static async fetchHealth(server) {
+    if (!server.directURL) return null;
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 3000);
+      const resp = await fetch(`${MonitorClient.baseURL(server)}/api/health`, { signal: ctrl.signal });
+      clearTimeout(tid);
+      return resp.ok ? await resp.json() : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // POST JSON with pairing token + session. Throws Error with .code on failure.
+  static async post(server, path, body) {
+    let resp;
+    try {
+      resp = await fetch(`${MonitorClient.baseURL(server)}${path}`, {
+        method: 'POST',
+        headers: { ...MonitorClient.authHeaders(server), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      const err = new Error('Server unreachable');
+      err.code = 'network';
+      throw err;
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const err = new Error(data.message || `HTTP ${resp.status}`);
+      err.code = data.error || 'http_' + resp.status;
+      throw err;
+    }
+    return data;
+  }
+
+  // Exchange the one-time PIN for a session token.
+  static async pair(server, pin) {
+    const data = await MonitorClient.post(server, '/api/pair', { pin });
+    return data.session || '';
   }
 
   // Probe single server status for multi-server fleet overview

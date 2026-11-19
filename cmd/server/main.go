@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"pc_monitor/pkg/api"
+	"pc_monitor/pkg/control"
 	"pc_monitor/pkg/pairing"
 	"pc_monitor/pkg/tailcat"
 	"pc_monitor/pkg/telemetry"
@@ -34,6 +35,7 @@ func main() {
 	tokenFlag := flag.String("token", "", "Pairing authentication token (auto-generated if empty)")
 	noTailcat := flag.Bool("no-tailcat", false, "Disable Tailcat tunnel (run in direct LAN mode only)")
 	exportHTML := flag.String("export-html", "pairing_card.html", "Path to save scannable pairing HTML card")
+	readOnly := flag.Bool("read-only", false, "Monitoring only: disable remote control (audio, shutdown/restart); no PIN needed")
 	verbose := flag.Bool("verbose", false, "Enable verbose debug output")
 	flag.Parse()
 
@@ -61,8 +63,21 @@ func main() {
 	defer cancel()
 	collector.Start(ctx)
 
-	// 4. Create API Server
-	apiServer := api.NewServer(*serverName, token, collector)
+	// 4. Create API Server. Unless read-only, dashboards must enter a
+	// one-time PIN (shown only here on the console) to connect; each used
+	// PIN is replaced by a new one for the next dashboard.
+	opts := api.Options{ReadOnly: *readOnly}
+	if !*readOnly {
+		pin, err := control.NewPIN(func(newPIN, reason string) {
+			fmt.Printf("\n  [pairing] %s. New control PIN: %s\n", reason, newPIN)
+		})
+		if err != nil {
+			fmt.Printf("Fatal: could not generate control PIN: %v\n", err)
+			os.Exit(1)
+		}
+		opts.PIN = pin
+	}
+	apiServer := api.NewServer(*serverName, token, collector, opts)
 	httpHandler := apiServer.Handler()
 
 	// 5. Start Tailcat Tunnel
@@ -181,6 +196,12 @@ func main() {
 	}
 
 	fmt.Println("------------------------------------------------------------------------")
+	if opts.PIN != nil {
+		fmt.Println("  Remote control: ENABLED (audio, shutdown/restart). Use -read-only to disable.")
+		fmt.Printf("  Control PIN:    %s   (enter in the dashboard to connect; one-time use)\n", opts.PIN.Current())
+	} else {
+		fmt.Println("  Remote control: disabled (read-only mode). No PIN required.")
+	}
 	fmt.Println("  Status: Monitoring active. Press Ctrl+C to terminate.")
 	fmt.Println("========================================================================")
 	fmt.Println()

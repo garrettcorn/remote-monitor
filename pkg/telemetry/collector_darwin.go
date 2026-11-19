@@ -129,7 +129,7 @@ func collectMemory() MemoryInfo {
 	return info
 }
 
-func collectDrives() []DriveInfo {
+func (c *Collector) collectDrives(now time.Time) []DriveInfo {
 	var drives []DriveInfo
 	var stat syscall.Statfs_t
 	mount := "/"

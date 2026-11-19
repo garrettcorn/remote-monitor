@@ -108,6 +108,23 @@ You can pair using any of these methods:
 - **In-App Scanner**: On your GitHub Pages web app, click **➕ Pair Server** ➔ **📷 Scan Terminal QR Code** to use your webcam or phone camera.
 - **Manual Input**: Paste the Tailcat address (`tc...`) or direct IP address into the pairing dialog.
 
+### Step 3: Enter the Control PIN
+
+Remote control (volume, mute, audio device switching, shutdown and restart) is **on by default**, so the dashboard asks for a one-time **4-digit PIN** the first time it connects. The PIN is printed only in the server's console:
+
+```
+  Remote control: ENABLED (audio, shutdown/restart). Use -read-only to disable.
+  Control PIN:    4821   (enter in the dashboard to connect; one-time use)
+```
+
+Each PIN works once. After it's used (or after 5 wrong attempts) the server prints a new PIN for the next dashboard:
+
+```
+  [pairing] PIN used. New control PIN: 0937
+```
+
+Sessions last until the server restarts. Start the server with `-read-only` for monitoring only: control is disabled and no PIN is needed.
+
 ---
 
 ## 🚀 CI/CD Pipelines & Releases
@@ -204,6 +221,7 @@ The script validates the changelog, runs tests, creates the Git tag `v1.1.0`, an
 | `-token` | *(auto-generated)* | Custom session token (random 32-character hex generated if omitted) |
 | `-no-tailcat`| `false` | Run in direct LAN / Tailscale IP mode only without Tailcat |
 | `-export-html`| `pairing_card.html`| Path to write a standalone HTML card with SVG QR code |
+| `-read-only` | `false` | Monitoring only: disable remote control (audio, shutdown/restart); dashboards connect without a PIN |
 | `-verbose` | `false` | Enable detailed debug logs for networking and telemetry |
 
 ---
@@ -258,3 +276,6 @@ pc_monitor/
 - **No Third-Party Cloud Dependency**: Your telemetry is never routed through third-party servers. Connections are established point-to-point via WireGuard encryption over Tailcat's data-plane or direct LAN.
 - **Session Authentication**: Every server session generates a cryptographically secure pairing token (`crypto/rand`). Requests without the token are rejected with `401 Unauthorized`.
 - **Private by Default**: Storage credentials remain strictly in your browser's local `localStorage`.
+- **PIN-Gated Control**: When remote control is enabled, telemetry and control both require a session that is only issued in exchange for a one-time PIN shown on the server console. Five wrong guesses replace the PIN, so a stolen pairing link alone cannot connect or power the machine off. Use `-read-only` to remove control entirely.
+- **Plain HTTP on the LAN port**: The direct port (`-port`, default `9120`) is unencrypted HTTP. Prefer Tailscale/Tailcat or a trusted network when control is enabled.
+- **SMART details need elevation**: Drive health status works for any user; temperature, wear and error counters require running the server as administrator (Windows) or root with `smartctl` (Linux).

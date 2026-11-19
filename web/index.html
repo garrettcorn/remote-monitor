@@ -8,7 +8,7 @@
   <meta name="color-scheme" content="dark light">
   <title>PC Monitor — System Telemetry & Multi-Server Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
@@ -70,8 +70,18 @@
             <span class="meta-label">Processes</span>
             <span id="host-procs" class="meta-val">--</span>
           </div>
+          <div class="meta-item">
+            <span class="meta-label">Signed in</span>
+            <span id="host-users" class="meta-val">--</span>
+          </div>
+          <div id="host-battery-item" class="meta-item hidden">
+            <span class="meta-label">Battery</span>
+            <span id="host-battery" class="meta-val">--</span>
+          </div>
         </div>
-        <div>
+        <div class="summary-actions">
+          <button id="btn-restart" class="btn btn-outline btn-sm control-only hidden" title="Restart this computer">Restart</button>
+          <button id="btn-shutdown" class="btn btn-outline btn-sm control-only hidden" title="Shut down this computer">Shut down</button>
           <button id="btn-delete-server" class="btn btn-danger btn-sm" title="Unpair this server">Unpair</button>
         </div>
       </section>
@@ -193,6 +203,34 @@
         </div>
       </section>
 
+      <!-- Row: Audio & Drive Health -->
+      <section class="grid-equal-col">
+        <div class="metric-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Audio</div>
+              <div id="audio-sub" class="sub-text">Output and input devices</div>
+            </div>
+            <div id="audio-mode-badge" class="badge hidden">Read-only</div>
+          </div>
+          <div id="audio-container">
+            <div class="sub-text">Waiting for audio devices...</div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Drive Health</div>
+              <div class="sub-text">Physical drives and SMART status</div>
+            </div>
+          </div>
+          <div id="disk-health-container" class="disk-health-list">
+            <div class="sub-text">Checking drives...</div>
+          </div>
+        </div>
+      </section>
+
       <!-- Row 3: Drives & Storage -->
       <section class="metric-card" style="margin-bottom: 24px;">
         <div class="card-header">
@@ -203,6 +241,19 @@
         </div>
         <div id="drives-container" class="drives-list">
           <div class="sub-text">Scanning storage volumes...</div>
+        </div>
+      </section>
+
+      <!-- Row: Connected Devices -->
+      <section class="metric-card" style="margin-bottom: 24px;">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Connected Devices</div>
+            <div class="sub-text">USB, Bluetooth and display devices attached to the host</div>
+          </div>
+        </div>
+        <div id="devices-container" class="devices-grid">
+          <div class="sub-text">Scanning devices...</div>
         </div>
       </section>
 
@@ -313,7 +364,31 @@
     </div>
   </div>
 
+  <!-- ================= CONTROL PIN MODAL ================= -->
+  <div id="pin-modal" class="modal-overlay hidden">
+    <div class="modal-card pin-card">
+      <div class="modal-header">
+        <div class="modal-title">Enter control PIN</div>
+        <button class="modal-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <p class="sub-text" style="margin-bottom: 18px;">
+        <strong id="pin-server-name">This server</strong> has remote control enabled. Enter the
+        4-digit PIN shown in the server's console. Each PIN works once; the server then shows a new one.
+      </p>
+      <form id="pin-form" autocomplete="off">
+        <input id="input-pin" class="form-input pin-input" type="text" inputmode="numeric"
+               pattern="[0-9]{4}" maxlength="4" placeholder="••••" aria-label="4-digit PIN"
+               autocomplete="one-time-code" required>
+        <div id="pin-error" class="pin-error hidden"></div>
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-outline modal-close-btn" style="flex: 1;">Cancel</button>
+          <button id="btn-pin-submit" type="submit" class="btn btn-primary" style="flex: 2;">Connect</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Main JavaScript App -->
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>

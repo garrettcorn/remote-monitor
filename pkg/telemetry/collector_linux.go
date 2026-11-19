@@ -147,7 +147,44 @@ func collectMemory() MemoryInfo {
 	return info
 }
 
-func collectDrives() []DriveInfo {
+func (c *Collector) collectDrives(now time.Time) []DriveInfo {
+	drives := collectDriveList()
+
+	// Per-device I/O from /proc/diskstats: fields are
+	// major minor name reads _ sectorsRead _ writes _ sectorsWritten _ inflight ioMs ...
+	cur := make(map[string]diskSample)
+	if data, err := os.ReadFile("/proc/diskstats"); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			f := strings.Fields(line)
+			if len(f) < 13 {
+				continue
+			}
+			sr, _ := strconv.ParseUint(f[5], 10, 64)
+			sw, _ := strconv.ParseUint(f[9], 10, 64)
+			io, _ := strconv.ParseUint(f[12], 10, 64)
+			cur[f[2]] = diskSample{readBytes: sr * 512, writeBytes: sw * 512, busyMs: io}
+		}
+	}
+	elapsed := now.Sub(c.prevDiskStamp).Seconds()
+	if c.prevDisk != nil && elapsed > 0 {
+		for i := range drives {
+			name := strings.TrimPrefix(drives[i].Device, "/dev/")
+			a, okA := c.prevDisk[name]
+			b, okB := cur[name]
+			if !okA || !okB || b.readBytes < a.readBytes || b.writeBytes < a.writeBytes || b.busyMs < a.busyMs {
+				continue
+			}
+			drives[i].ReadSpeedBps = uint64(float64(b.readBytes-a.readBytes) / elapsed)
+			drives[i].WriteSpeedBps = uint64(float64(b.writeBytes-a.writeBytes) / elapsed)
+			drives[i].BusyPercent = min(100, float64(b.busyMs-a.busyMs)/(elapsed*1000)*100)
+		}
+	}
+	c.prevDisk = cur
+	c.prevDiskStamp = now
+	return drives
+}
+
+func collectDriveList() []DriveInfo {
 	var drives []DriveInfo
 	f, err := os.Open("/proc/mounts")
 	if err != nil {
@@ -250,6 +287,21 @@ func (c *Collector) collectNetwork(now time.Time) NetworkInfo {
 				ni.BytesSent = stats[1]
 				netInfo.TotalBytesRecv += stats[0]
 				netInfo.TotalBytesSent += stats[1]
+				if el := now.Sub(c.prevNetTimes.timestamp).Seconds(); el > 0 {
+					if prev, ok := c.prevNetTimes.ifaceRecv[iface.Name]; ok && stats[0] >= prev {
+						ni.SpeedRecv = uint64(float64(stats[0]-prev) / el)
+					}
+					if prev, ok := c.prevNetTimes.ifaceSent[iface.Name]; ok && stats[1] >= prev {
+						ni.SpeedSent = uint64(float64(stats[1]-prev) / el)
+					}
+				}
+				c.prevNetTimes.ifaceRecv[iface.Name] = stats[0]
+				c.prevNetTimes.ifaceSent[iface.Name] = stats[1]
+			}
+			if b, err := os.ReadFile("/sys/class/net/" + iface.Name + "/speed"); err == nil {
+				if mbps, err := strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64); err == nil && mbps > 0 {
+					ni.LinkMbps = uint64(mbps)
+				}
 			}
 
 			addrs, _ := iface.Addrs()

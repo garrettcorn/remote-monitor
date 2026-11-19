@@ -37,18 +37,8 @@ func collectMemory() MemoryInfo {
 	}
 }
 
-func collectDrives() []DriveInfo {
-	return []DriveInfo{
-		{
-			Device:       "root",
-			Mountpoint:   "/",
-			Filesystem:   "unknown",
-			TotalBytes:   100 * 1024 * 1024 * 1024,
-			UsedBytes:    20 * 1024 * 1024 * 1024,
-			FreeBytes:    80 * 1024 * 1024 * 1024,
-			UsagePercent: 20.0,
-		},
-	}
+func (c *Collector) collectDrives(now time.Time) []DriveInfo {
+	return []DriveInfo{}
 }
 
 func (c *Collector) collectNetwork(now time.Time) NetworkInfo {
