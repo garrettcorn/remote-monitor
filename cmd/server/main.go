@@ -36,6 +36,7 @@ func main() {
 	noTailcat := flag.Bool("no-tailcat", false, "Disable Tailcat tunnel (run in direct LAN mode only)")
 	exportHTML := flag.String("export-html", "pairing_card.html", "Path to save scannable pairing HTML card")
 	readOnly := flag.Bool("read-only", false, "Monitoring only: disable remote control (audio, shutdown/restart); no PIN needed")
+	resetPairing := flag.Bool("reset-pairing", false, "Revoke all paired dashboards: new pairing token and PIN sessions")
 	verbose := flag.Bool("verbose", false, "Enable verbose debug output")
 	flag.Parse()
 
@@ -43,14 +44,33 @@ func main() {
 	fmt.Println("  PC MONITOR SERVER - Cross-Platform System Telemetry & Pairing")
 	fmt.Println("========================================================================")
 
-	// 1. Generate or use token
+	// Pairing state lives next to the Tailcat key so paired dashboards keep
+	// working across restarts.
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".pc_monitor")
+	tokenFile := filepath.Join(stateDir, "pairing_token")
+	sessionsFile := filepath.Join(stateDir, "sessions.json")
+	if *resetPairing {
+		for _, f := range []string{tokenFile, sessionsFile} {
+			if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+				fmt.Printf("Fatal: could not reset pairing (%s): %v\n", f, err)
+				os.Exit(1)
+			}
+		}
+		fmt.Println("  Pairing reset: all previously paired dashboards have been revoked.")
+	}
+
+	// 1. Use the -token flag, else the saved token, else create and save one.
 	token := *tokenFlag
 	if token == "" {
 		var err error
-		token, err = pairing.GenerateToken(16)
+		token, _, err = control.LoadOrCreateToken(tokenFile, func() (string, error) { return pairing.GenerateToken(16) })
 		if err != nil {
-			fmt.Printf("Warning: Failed to generate crypto token: %v\n", err)
-			token = fmt.Sprintf("tok-%d", time.Now().Unix())
+			fmt.Printf("Warning: could not load/save pairing token (%v); using a temporary one\n", err)
+			token, err = pairing.GenerateToken(16)
+			if err != nil {
+				token = fmt.Sprintf("tok-%d", time.Now().UnixNano())
+			}
 		}
 	}
 
@@ -76,6 +96,12 @@ func main() {
 			os.Exit(1)
 		}
 		opts.PIN = pin
+		sessions, err := control.LoadSessions(sessionsFile)
+		if err != nil {
+			fmt.Printf("Warning: could not load saved pairings (%v); dashboards will need a new PIN\n", err)
+			sessions = nil
+		}
+		opts.Sessions = sessions
 	}
 	apiServer := api.NewServer(*serverName, token, collector, opts)
 	httpHandler := apiServer.Handler()
@@ -176,29 +202,19 @@ func main() {
 
 	if len(matrix) > 0 {
 		fmt.Println("\n  ┌─────────────────────────────────────────┐")
-		fmt.Println("  │  QR 1 — Full Pairing Link (Tailcat P2P) │")
+		fmt.Println("  │  Pairing QR Code                        │")
 		fmt.Println("  └─────────────────────────────────────────┘")
-		fmt.Println("  Scan with phone camera to pair via Tailcat:")
+		fmt.Println("  Scan with your phone camera to pair:")
 		fmt.Println(pairing.RenderTerminalQR(matrix))
-	}
-
-	// Second QR — Direct LAN URL (no Tailcat required)
-	if len(localIPs) > 0 && *directPort > 0 {
-		lanURL := fmt.Sprintf("http://%s:%d", localIPs[0], *directPort)
-		lanMatrix, lanErr := pairing.EncodeQR(lanURL)
-		if lanErr == nil {
-			fmt.Println("  ┌─────────────────────────────────────────┐")
-			fmt.Println("  │  QR 2 — Direct LAN URL (same network)   │")
-			fmt.Println("  └─────────────────────────────────────────┘")
-			fmt.Printf("  Scan to open API directly at %s\n", lanURL)
-			fmt.Println(pairing.RenderTerminalQR(lanMatrix))
-		}
 	}
 
 	fmt.Println("------------------------------------------------------------------------")
 	if opts.PIN != nil {
 		fmt.Println("  Remote control: ENABLED (audio, shutdown/restart). Use -read-only to disable.")
 		fmt.Printf("  Control PIN:    %s   (enter in the dashboard to connect; one-time use)\n", opts.PIN.Current())
+		if opts.Sessions != nil {
+			fmt.Printf("  Paired:         %d dashboard(s) remembered across restarts (-reset-pairing to revoke)\n", opts.Sessions.Count())
+		}
 	} else {
 		fmt.Println("  Remote control: disabled (read-only mode). No PIN required.")
 	}

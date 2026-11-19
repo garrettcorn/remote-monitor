@@ -4,10 +4,17 @@ package control
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -80,18 +87,51 @@ func randomPIN() (string, error) {
 }
 
 // Sessions holds control session tokens issued after a successful PIN.
-// They live in memory, so restarting the server requires re-pairing.
+// Only SHA-256 hashes are kept, so a persisted sessions file cannot be used
+// to impersonate a paired dashboard.
 type Sessions struct {
 	mu     sync.Mutex
-	tokens map[string]struct{}
+	hashes map[string]struct{}
+	path   string // where to persist; empty = memory only
 }
 
-// NewSessions creates an empty session store.
+// NewSessions creates an empty in-memory session store.
 func NewSessions() *Sessions {
-	return &Sessions{tokens: make(map[string]struct{})}
+	return &Sessions{hashes: make(map[string]struct{})}
 }
 
-// Issue creates a new random session token.
+type sessionsFile struct {
+	Sessions []string `json:"sessions"` // hex SHA-256 of each session token
+}
+
+// LoadSessions creates a session store persisted at path, loading any
+// sessions saved by a previous run (a missing file means none), so paired
+// dashboards keep working across server restarts.
+func LoadSessions(path string) (*Sessions, error) {
+	s := &Sessions{hashes: make(map[string]struct{}), path: path}
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return s, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var f sessionsFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	for _, h := range f.Sessions {
+		s.hashes[h] = struct{}{}
+	}
+	return s, nil
+}
+
+func hashToken(tok string) string {
+	sum := sha256.Sum256([]byte(tok))
+	return hex.EncodeToString(sum[:])
+}
+
+// Issue creates a new random session token (and persists it).
 func (s *Sessions) Issue() (string, error) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
@@ -99,8 +139,12 @@ func (s *Sessions) Issue() (string, error) {
 	}
 	tok := hex.EncodeToString(b)
 	s.mu.Lock()
-	s.tokens[tok] = struct{}{}
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	s.hashes[hashToken(tok)] = struct{}{}
+	if err := s.saveLocked(); err != nil {
+		delete(s.hashes, hashToken(tok))
+		return "", err
+	}
 	return tok, nil
 }
 
@@ -111,6 +155,82 @@ func (s *Sessions) Valid(tok string) bool {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, ok := s.tokens[tok]
+	_, ok := s.hashes[hashToken(tok)]
 	return ok
+}
+
+// Count returns the number of paired sessions.
+func (s *Sessions) Count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.hashes)
+}
+
+// Reset revokes every session (and persists the empty set).
+func (s *Sessions) Reset() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.hashes = make(map[string]struct{})
+	return s.saveLocked()
+}
+
+func (s *Sessions) saveLocked() error {
+	if s.path == "" {
+		return nil
+	}
+	f := sessionsFile{Sessions: make([]string, 0, len(s.hashes))}
+	for h := range s.hashes {
+		f.Sessions = append(f.Sessions, h)
+	}
+	sort.Strings(f.Sessions)
+	data, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return err
+	}
+	return WriteFileAtomic(s.path, data)
+}
+
+// WriteFileAtomic writes data to path via a temp file and rename, creating
+// the directory if needed, readable only by the current user.
+func WriteFileAtomic(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name()) // no-op after a successful rename
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+// LoadOrCreateToken returns the pairing token stored at path, creating and
+// saving one with gen if none exists. created reports a new token.
+func LoadOrCreateToken(path string, gen func() (string, error)) (token string, created bool, err error) {
+	data, err := os.ReadFile(path)
+	if err == nil {
+		if tok := strings.TrimSpace(string(data)); tok != "" {
+			return tok, false, nil
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", false, err
+	}
+	tok, err := gen()
+	if err != nil {
+		return "", false, err
+	}
+	if err := WriteFileAtomic(path, []byte(tok+"\n")); err != nil {
+		return "", false, err
+	}
+	return tok, true, nil
 }

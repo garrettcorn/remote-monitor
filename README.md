@@ -123,7 +123,9 @@ Each PIN works once. After it's used (or after 5 wrong attempts) the server prin
   [pairing] PIN used. New control PIN: 0937
 ```
 
-Sessions last until the server restarts. Start the server with `-read-only` for monitoring only: control is disabled and no PIN is needed.
+Pairings are remembered: the pairing token and paired sessions are saved in `~/.pc_monitor/` (`pairing_token`, `sessions.json`, readable only by your user; sessions are stored as hashes), so dashboards reconnect automatically after the server restarts. To revoke every paired dashboard, start the server once with `-reset-pairing`; it creates a new pairing link and QR code.
+
+Start the server with `-read-only` for monitoring only: control is disabled and no PIN is needed.
 
 ---
 
@@ -218,10 +220,11 @@ The script validates the changelog, runs tests, creates the Git tag `v1.1.0`, an
 | `-port` | `9120` | Direct HTTP/WebSocket port for LAN or Tailscale IP connections (set `0` to disable) |
 | `-tc-port` | `8080` | TCP port inside the Tailcat WireGuard tunnel |
 | `-web-url` | `https://your-username.github.io/pc_monitor/` | Base URL of your deployed GitHub Pages client |
-| `-token` | *(auto-generated)* | Custom session token (random 32-character hex generated if omitted) |
+| `-token` | *(saved)* | Custom pairing token. If omitted, a random 32-character hex token is created once and reused from `~/.pc_monitor/pairing_token` |
 | `-no-tailcat`| `false` | Run in direct LAN / Tailscale IP mode only without Tailcat |
 | `-export-html`| `pairing_card.html`| Path to write a standalone HTML card with SVG QR code |
 | `-read-only` | `false` | Monitoring only: disable remote control (audio, shutdown/restart); dashboards connect without a PIN |
+| `-reset-pairing` | `false` | Revoke all paired dashboards: new pairing token and cleared PIN sessions |
 | `-verbose` | `false` | Enable detailed debug logs for networking and telemetry |
 
 ---

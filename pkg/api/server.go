@@ -21,6 +21,9 @@ type Options struct {
 	ReadOnly bool
 	// PIN is the one-time pairing PIN manager. Required unless ReadOnly.
 	PIN *control.PIN
+	// Sessions stores PIN-issued sessions; nil means in-memory only. Pass a
+	// persistent store (control.LoadSessions) to survive restarts.
+	Sessions *control.Sessions
 }
 
 // Server handles HTTP and WebSocket telemetry requests.
@@ -39,12 +42,16 @@ type Server struct {
 
 // NewServer creates a new API server.
 func NewServer(serverName, token string, collector *telemetry.Collector, opts Options) *Server {
+	sessions := opts.Sessions
+	if sessions == nil {
+		sessions = control.NewSessions()
+	}
 	return &Server{
 		serverName: serverName,
 		token:      token,
 		collector:  collector,
 		opts:       opts,
-		sessions:   control.NewSessions(),
+		sessions:   sessions,
 		clients:    make(map[*websocket.Conn]struct{}),
 		doPower:    power.Do,
 	}

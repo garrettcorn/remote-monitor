@@ -153,6 +153,13 @@ export class MonitorClient {
             this.authRequired(server);
             return;
           }
+          if (body.error === 'unauthorized') {
+            // Token no longer accepted (e.g. server ran with -reset-pairing).
+            this.disconnect();
+            this.activeServer = null;
+            this.setStatus('offline', 'Pairing revoked: scan the new QR code');
+            return;
+          }
         }
         if (!resp.ok) {
           throw new Error(`HTTP ${resp.status}`);
