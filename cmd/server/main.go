@@ -160,8 +160,24 @@ func main() {
 	}
 
 	if len(matrix) > 0 {
-		fmt.Println("\n  SCAN WITH PHONE CAMERA TO PAIR INSTANTLY:")
+		fmt.Println("\n  ┌─────────────────────────────────────────┐")
+		fmt.Println("  │  QR 1 — Full Pairing Link (Tailcat P2P) │")
+		fmt.Println("  └─────────────────────────────────────────┘")
+		fmt.Println("  Scan with phone camera to pair via Tailcat:")
 		fmt.Println(pairing.RenderTerminalQR(matrix))
+	}
+
+	// Second QR — Direct LAN URL (no Tailcat required)
+	if len(localIPs) > 0 && *directPort > 0 {
+		lanURL := fmt.Sprintf("http://%s:%d", localIPs[0], *directPort)
+		lanMatrix, lanErr := pairing.EncodeQR(lanURL)
+		if lanErr == nil {
+			fmt.Println("  ┌─────────────────────────────────────────┐")
+			fmt.Println("  │  QR 2 — Direct LAN URL (same network)   │")
+			fmt.Println("  └─────────────────────────────────────────┘")
+			fmt.Printf("  Scan to open API directly at %s\n", lanURL)
+			fmt.Println(pairing.RenderTerminalQR(lanMatrix))
+		}
 	}
 
 	fmt.Println("------------------------------------------------------------------------")

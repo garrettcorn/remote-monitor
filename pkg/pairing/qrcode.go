@@ -12,7 +12,7 @@ func RenderTerminalQR(matrix [][]bool) string {
 		return ""
 	}
 	size := len(matrix)
-	border := 2
+	border := 4 // QR spec requires a 4-module quiet zone
 	totalSize := size + border*2
 
 	// Build padded matrix
