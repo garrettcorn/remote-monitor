@@ -159,6 +159,22 @@ func (s *Sessions) Valid(tok string) bool {
 	return ok
 }
 
+// Revoke forgets one session (a dashboard that unpaired itself). It
+// reports whether the session existed.
+func (s *Sessions) Revoke(tok string) (bool, error) {
+	if tok == "" {
+		return false, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h := hashToken(tok)
+	if _, ok := s.hashes[h]; !ok {
+		return false, nil
+	}
+	delete(s.hashes, h)
+	return true, s.saveLocked()
+}
+
 // Count returns the number of paired sessions.
 func (s *Sessions) Count() int {
 	s.mu.Lock()

@@ -40,6 +40,15 @@ export const ServerStore = {
     return server;
   },
 
+  // Update a server that is still paired; returns null (and saves nothing)
+  // if it has been unpaired meanwhile. Background updates (snapshots,
+  // health checks, pings) must use this, never saveServer, or an
+  // unpaired server would be added straight back.
+  updateServer(server) {
+    if (!server?.id || !this.getServer(server.id)) return null;
+    return this.saveServer(server);
+  },
+
   deleteServer(id) {
     let servers = this.getServers();
     servers = servers.filter(s => s.id !== id);

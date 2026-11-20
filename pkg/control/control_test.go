@@ -70,3 +70,27 @@ func TestLoadOrCreateToken(t *testing.T) {
 		t.Fatalf("second load should reuse saved token: tok=%q created=%v calls=%d err=%v", tok, created, calls, err)
 	}
 }
+
+func TestSessionsRevoke(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	s, err := LoadSessions(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := s.Issue()
+	b, _ := s.Issue()
+	if ok, err := s.Revoke(a); !ok || err != nil {
+		t.Fatalf("revoke: %v %v", ok, err)
+	}
+	if ok, _ := s.Revoke(a); ok {
+		t.Fatal("revoked twice")
+	}
+	if s.Valid(a) || !s.Valid(b) {
+		t.Fatal("wrong session revoked")
+	}
+	// Persisted: a reload still rejects a and accepts b.
+	s2, _ := LoadSessions(path)
+	if s2.Valid(a) || !s2.Valid(b) {
+		t.Fatal("revocation not saved")
+	}
+}

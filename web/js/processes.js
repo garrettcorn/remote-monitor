@@ -2,8 +2,8 @@
 // with each app expandable to its individual processes and End task on
 // PIN-paired servers.
 
-import { UI } from './ui.js?v=25';
-import { MonitorClient } from './client.js?v=25';
+import { UI } from './ui.js?v=26';
+import { MonitorClient } from './client.js?v=26';
 
 const esc = UI.esc;
 const SORT_KEY = 'pc_monitor_proc_sort';

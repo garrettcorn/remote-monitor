@@ -1,6 +1,6 @@
 // UI Renderer for dashboard widgets, gauges, drives, and process tables.
 
-import { GetStarted } from './onboarding.js?v=25';
+import { GetStarted } from './onboarding.js?v=26';
 
 const ICONS = {
   drive: '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5" width="15" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="10" r="1.2" fill="currentColor"/><path d="M5.5 10h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',

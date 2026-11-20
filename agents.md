@@ -76,7 +76,7 @@ pc_monitor/
 │   ├── pairing/                    # Token gen, pairing URL, HTML card, pure-Go QR encoder + ANSI/SVG render
 │   └── tailcat/tunnel.go           # StartTunnel(): key persistence, DERP bootstrap
 ├── web/                            # Static client, deployed to GitHub Pages as-is
-│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=25); sections tagged data-section="…"
+│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=26); sections tagged data-section="…"
 │   ├── style.css                   # "Liquid Glass" theme, light + dark
 │   └── js/ app.js, client.js, ui.js, panel.js (Customize + Control Panel buttons), processes.js, onboarding.js (first-run Get started), storage.js, charts.js, qr-scanner.js
 ├── scripts/                        # build.ps1/.sh (cross-compile), release.ps1/.sh (local packaging)
@@ -212,6 +212,7 @@ PIN: 4 digits (crypto/rand), constant-time compare, one-time; rotated after use 
 |---|---|---|---|
 | `GET` | `/api/health` | none | `status`, `server_name`, `control_enabled`, `pin_required` |
 | `POST` | `/api/pair` | token | `{pin}` → `{session}` |
+| `POST` | `/api/unpair` | token + session | Revokes the caller's own session (dashboard Unpair); other dashboards unaffected; `200` on read-only servers |
 | `GET` | `/api/telemetry` | token (+ session if control) | Full `SystemSnapshot` |
 | `GET` | `/ws` | token (+ session) via query | Streams snapshots every 1.2 s |
 | `POST` | `/api/audio/volume` | token + session | `{id, volume 0-100}` → fresh audio state |
@@ -339,6 +340,7 @@ PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 
 | BOM in JSON config | PowerShell `Set-Content -Encoding utf8` and some editors add a UTF-8 BOM; `deck.LoadLaunchActions` strips it. Do the same for any new config file |
 | `SendInput` struct | `INPUT` must be 40 bytes on 64-bit (union sized by `MOUSEINPUT`); `deck_test.go` guards the layout |
 | Windows update swap | A running exe can be renamed but not deleted, and a tray started before an update keeps running from `<exe>.old`. `replaceFiles` stages every file, moves old ones to `.old` (or a unique `.old-<n>` if `.old` is still locked), rolls back on any failure, and `CleanupOld` globs leftovers at startup. The tray relaunches itself when the server's version differs and its exe changed on disk. `update_windows_test.go` reproduces the lock with `CreateFile` share modes |
+| Saving servers in the dashboard | `ServerStore.saveServer` adds a server if it's missing, so only real pairing may call it. Every background update (snapshots, health, PIN, update checks, fleet pings) must use `ServerStore.updateServer`, which does nothing for an unpaired server; otherwise Unpair is undone by the next snapshot. `unpairServer()` disconnects before deleting, and the snapshot callback ignores servers that aren't active |
 | Install links | Release asset names include the version, so `releases/latest/download/<name>` can't be used for stable links. The README links to the latest release page and names the file; the dashboard's Get started guide (`onboarding.js`) asks `api.github.com/repos/…/releases/latest` (cached 1 h in `sessionStorage`) and links the exact asset, falling back to the release page. If asset names change, update `DOWNLOADS` there too. Homebrew/Scoop repos are still empty, so docs call them "planned" |
 | Testing button actions | Only press harmless keys on the dev machine (e.g. a hotkey for `F24`); never media keys, launch or URL buttons while the user is working |
 | Float args in Windows syscalls | Go's amd64 Windows call path mirrors int args into XMM regs (floats OK); **arm64 does not** → use the step-based volume path |

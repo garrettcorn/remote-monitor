@@ -112,6 +112,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/pair", s.requireToken(s.handlePair))
+	mux.HandleFunc("/api/unpair", s.requireAccess(s.handleUnpair))
 	mux.HandleFunc("/api/telemetry", s.requireAccess(s.handleTelemetry))
 	mux.HandleFunc("/ws", s.requireAccess(s.handleWebSocket))
 
@@ -257,6 +258,23 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePair exchanges the one-time PIN for a session token.
+// handleUnpair revokes the caller's own session when a dashboard unpairs,
+// so that browser can't reconnect without a new PIN. Other dashboards are
+// unaffected.
+func (s *Server) handleUnpair(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
+		return
+	}
+	if s.controlEnabled() {
+		if _, err := s.sessions.Revoke(sessionFrom(r)); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "unpair_failed", err.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "unpaired"})
+}
+
 func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")

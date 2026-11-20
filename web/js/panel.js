@@ -1,8 +1,8 @@
 // Dashboard customization (show/hide sections) and the Control Panel
 // button grid.
 
-import { UI } from './ui.js?v=25';
-import { MonitorClient } from './client.js?v=25';
+import { UI } from './ui.js?v=26';
+import { MonitorClient } from './client.js?v=26';
 
 const esc = UI.esc;
 

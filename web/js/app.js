@@ -1,12 +1,12 @@
 // Main Application Orchestrator for PC Monitor GitHub Pages Client
 
 import { ServerStore } from './storage.js';
-import { MonitorClient } from './client.js?v=25';
+import { MonitorClient } from './client.js?v=26';
 import { SparklineChart } from './charts.js';
-import { UI } from './ui.js?v=25';
+import { UI } from './ui.js?v=26';
 import { QRScanner } from './qr-scanner.js';
-import { Layout, Deck, Screens } from './panel.js?v=25';
-import { Processes } from './processes.js?v=25';
+import { Layout, Deck, Screens } from './panel.js?v=26';
+import { Processes } from './processes.js?v=26';
 
 class App {
   constructor() {
@@ -78,12 +78,7 @@ class App {
     document.getElementById('btn-stop-scanner')?.addEventListener('click', () => this.stopCameraScanner());
 
     // Delete active server
-    document.getElementById('btn-delete-server')?.addEventListener('click', () => {
-      if (this.activeServer && confirm(`Unpair server "${this.activeServer.name}"?`)) {
-        ServerStore.deleteServer(this.activeServer.id);
-        this.refreshServerList();
-      }
-    });
+    document.getElementById('btn-delete-server')?.addEventListener('click', () => this.unpairServer());
 
     // Control PIN form
     document.getElementById('pin-form')?.addEventListener('submit', (e) => {
@@ -229,7 +224,7 @@ class App {
     try {
       const u = await MonitorClient.post(server, '/api/update', { action: 'check' });
       server.update = u;
-      ServerStore.saveServer(server);
+      ServerStore.updateServer(server);
       if (u.error) this.showToast(`Couldn't check for updates: ${u.error}`);
       else if (u.available && u.can_apply) this.showToast(`Version ${u.latest} is available`);
       else if (u.available) this.showToast(`Version ${u.latest} is available. ${u.note || ''}`.trim());
@@ -296,7 +291,7 @@ class App {
       this.requirePIN(server);
     } else if (e.code === 'read_only') {
       server.controlEnabled = false;
-      ServerStore.saveServer(server);
+      ServerStore.updateServer(server);
       this.setControlUI(false);
       this.showToast('This server is read-only');
     } else {
@@ -304,10 +299,27 @@ class App {
     }
   }
 
+  // Forget the active server in this browser: stop the live connection
+  // first (its next snapshot would otherwise save the server again), tell
+  // the server to revoke this browser's session, then show the next server
+  // or the overview.
+  unpairServer() {
+    const server = this.activeServer;
+    if (!server || !confirm(`Unpair "${server.name}"?\n\nThis browser stops monitoring it. To pair again you'll need its pairing link or QR code and a new PIN.`)) return;
+    this.client.disconnect();
+    this.activeServer = null;
+    // Best effort: older servers (before 1.8.2) don't have /api/unpair.
+    if (server.session) MonitorClient.post(server, '/api/unpair', {}).catch(() => {});
+    ServerStore.deleteServer(server.id);
+    this.refreshServerList();
+    if (!ServerStore.getServers().length) this.updateConnectionStatus('offline', 'No servers paired');
+    this.showToast(`Unpaired ${server.name}`);
+  }
+
   // Ask for the one-time PIN shown on the server console.
   requirePIN(server) {
     server.session = '';
-    ServerStore.saveServer(server);
+    ServerStore.updateServer(server);
     this.client.disconnect();
     this.updateConnectionStatus('offline', 'PIN required');
     this.pinServer = server;
@@ -338,7 +350,7 @@ class App {
     try {
       server.session = await MonitorClient.pair(server, pin);
       server.controlEnabled = true;
-      ServerStore.saveServer(server);
+      ServerStore.updateServer(server);
       this.pinServer = null;
       document.getElementById('pin-modal')?.classList.add('hidden');
       this.showToast(`Connected to ${server.name}`);
@@ -453,7 +465,7 @@ class App {
       server.processIcons = !!health.process_icons;
       server.version = health.version || '';
       server.update = health.update || null;
-      ServerStore.saveServer(server);
+      ServerStore.updateServer(server);
     }
     this.renderVersion(server);
     this.setControlUI(!!server.controlEnabled);
@@ -471,10 +483,12 @@ class App {
     this.client.connect(
       server,
       (snapshot) => {
+        // A late message from a server that was unpaired or switched away.
+        if (this.activeServer !== server) return;
         // Cache snapshot (without bulky fields) for the fleet view
         server.lastSnapshot = { host: snapshot.host, cpu: { usage_percent: snapshot.cpu?.usage_percent }, memory: { usage_percent: snapshot.memory?.usage_percent } };
         server.status = 'online';
-        ServerStore.saveServer(server);
+        ServerStore.updateServer(server);
         UI.renderSnapshot(snapshot, this.charts);
         this.renderAudio(snapshot.audio);
         this.screens.update(snapshot.displays);
@@ -605,7 +619,7 @@ class App {
         if (this.activeServer && s.id === this.activeServer.id) continue;
         const res = await MonitorClient.pingServer(s);
         s.status = res.status;
-        ServerStore.saveServer(s);
+        ServerStore.updateServer(s);
       }
       if (this.currentView === 'fleet') {
         UI.renderFleetOverview(servers, (id) => this.switchServer(id));

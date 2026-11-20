@@ -448,3 +448,38 @@ func TestProcessIconEndpoint(t *testing.T) {
 		t.Fatalf("no token: %d", w.Code)
 	}
 }
+
+func TestUnpairRevokesOnlyThatSession(t *testing.T) {
+	collector := telemetry.NewCollector(500 * time.Millisecond)
+	pin, _ := control.NewPIN(nil)
+	srv := NewServer("test-server", "secret-token", collector, Options{PIN: pin})
+	h := srv.Handler()
+	pair := func() map[string]string {
+		w := do(t, h, "POST", "/api/pair", `{"pin":"`+pin.Current()+`"}`, map[string]string{"X-Pairing-Token": "secret-token"})
+		var p struct {
+			Session string `json:"session"`
+		}
+		_ = json.Unmarshal(w.Body.Bytes(), &p)
+		return map[string]string{"X-Pairing-Token": "secret-token", "X-Session": p.Session}
+	}
+	a, b := pair(), pair()
+	if w := do(t, h, "POST", "/api/unpair", "", a); w.Code != http.StatusOK {
+		t.Fatalf("unpair: %d %s", w.Code, w.Body.String())
+	}
+	// A can't connect any more; B still can.
+	if w := do(t, h, "GET", "/api/telemetry", "", a); w.Code != http.StatusUnauthorized {
+		t.Fatalf("unpaired session still works: %d", w.Code)
+	}
+	if w := do(t, h, "GET", "/api/telemetry", "", b); w.Code != http.StatusOK {
+		t.Fatalf("other session revoked: %d", w.Code)
+	}
+	// Needs a valid session (can't revoke someone else's by guessing).
+	if w := do(t, h, "POST", "/api/unpair", "", map[string]string{"X-Pairing-Token": "secret-token"}); w.Code != http.StatusUnauthorized {
+		t.Fatalf("unpair without session: %d", w.Code)
+	}
+	// Read-only servers have no sessions: unpair just succeeds.
+	ro := NewServer("ro", "secret-token", collector, Options{ReadOnly: true})
+	if w := do(t, ro.Handler(), "POST", "/api/unpair?token=secret-token", "", nil); w.Code != http.StatusOK {
+		t.Fatalf("read-only unpair: %d", w.Code)
+	}
+}
