@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.2] - 2026-11-20
+
+### Changed
+- Allow a single modifier key on its own (Win, Ctrl, Shift or Alt) in shortcuts and Control Panel buttons ([`c13398f`](https://github.com/garrettcorn/remote-monitor/commit/c13398f))
+
+### Fixed
+- Fix the Win button in the screen viewer being refused by the server ([`c13398f`](https://github.com/garrettcorn/remote-monitor/commit/c13398f))
+- Keep remote control on when the host refuses a single key or click ([`c13398f`](https://github.com/garrettcorn/remote-monitor/commit/c13398f))
+
 ## [1.7.1] - 2026-11-20
 
 ### Added
@@ -160,6 +169,7 @@ All notable changes to this project will be documented in this file.
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
 
+[1.7.2]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.2
 [1.7.1]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.1
 [1.7.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.0
 [1.6.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.6.0
