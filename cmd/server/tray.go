@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 
@@ -57,6 +58,23 @@ func trayReady(port int) {
 
 	var latest stateResp
 	running := false
+	// After an update the server runs the new version but this tray is still
+	// the old one, holding its (renamed) executable open; that blocks the next
+	// update on Windows. Relaunch from the updated file once it has changed.
+	self, selfInfo := ownExecutable()
+	relaunched := false
+	maybeRelaunch := func() {
+		if relaunched || buildinfo.IsDev() || latest.Version == "" || latest.Version == buildinfo.Version {
+			return
+		}
+		if fi, err := os.Stat(self); err != nil || selfInfo == nil || (fi.ModTime().Equal(selfInfo.ModTime()) && fi.Size() == selfInfo.Size()) {
+			return // not replaced on disk: a different install, leave it
+		}
+		if service.StartTray() == nil {
+			relaunched = true
+			systray.Quit()
+		}
+	}
 	refresh := func() {
 		ok, _ := pingSettings(port)
 		running = ok
@@ -71,6 +89,7 @@ func trayReady(port int) {
 			status.SetTitle("Running")
 			return
 		}
+		maybeRelaunch()
 		s := "Running"
 		if latest.Pairing.Control {
 			s = fmt.Sprintf("Running · %d dashboard(s) paired", latest.Pairing.Paired)
@@ -159,4 +178,17 @@ func trayReady(port int) {
 			}
 		}
 	}()
+}
+
+// ownExecutable returns this program's path and its file info at startup.
+func ownExecutable() (string, os.FileInfo) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", nil
+	}
+	if p := os.Getenv("APPIMAGE"); p != "" {
+		exe = p
+	}
+	fi, _ := os.Stat(exe)
+	return exe, fi
 }

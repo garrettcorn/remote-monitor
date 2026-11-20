@@ -320,6 +320,7 @@ PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 
 | JS written via shell heredocs | Backslashes in regexes/strings can get mangled (a broken regex in `panel.js` once stopped the whole app). Prefer string ops over regex for paths, and always load the page and check the console |
 | BOM in JSON config | PowerShell `Set-Content -Encoding utf8` and some editors add a UTF-8 BOM; `deck.LoadLaunchActions` strips it. Do the same for any new config file |
 | `SendInput` struct | `INPUT` must be 40 bytes on 64-bit (union sized by `MOUSEINPUT`); `deck_test.go` guards the layout |
+| Windows update swap | A running exe can be renamed but not deleted, and a tray started before an update keeps running from `<exe>.old`. `replaceFiles` stages every file, moves old ones to `.old` (or a unique `.old-<n>` if `.old` is still locked), rolls back on any failure, and `CleanupOld` globs leftovers at startup. The tray relaunches itself when the server's version differs and its exe changed on disk. `update_windows_test.go` reproduces the lock with `CreateFile` share modes |
 | Testing button actions | Only press harmless keys on the dev machine (e.g. a hotkey for `F24`); never media keys, launch or URL buttons while the user is working |
 | Float args in Windows syscalls | Go's amd64 Windows call path mirrors int args into XMM regs (floats OK); **arm64 does not** → use the step-based volume path |
 | COM out-params | Allocate with `//go:noinline` helpers (heap) so Go stack moves can't invalidate pointers passed to COM |

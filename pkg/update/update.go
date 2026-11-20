@@ -340,12 +340,11 @@ func (c *Checker) Apply(ctx context.Context) error {
 			return err
 		}
 	}
+	files := make([]newFile, len(reps))
 	for i, r := range reps {
-		if err := replaceFile(r.target, bins[i]); err != nil {
-			return err
-		}
+		files[i] = newFile{r.target, bins[i]}
 	}
-	return nil
+	return replaceFiles(files)
 }
 
 // VerifySignature checks checksums.txt against its base64 signature.
@@ -431,47 +430,120 @@ func extract(data []byte, archiveName, inner string) ([]byte, error) {
 	}
 }
 
-// replaceFile swaps target for new contents. A running executable can't be
-// overwritten on Windows but can be renamed, so the old file moves aside to
-// <name>.old (cleaned up on next start by CleanupOld).
-func replaceFile(target string, data []byte) error {
-	dir := filepath.Dir(target)
-	tmp, err := os.CreateTemp(dir, filepath.Base(target)+".new-*")
-	if err != nil {
-		return fmt.Errorf("can't write next to %s (try running as the user who installed it): %w", target, err)
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmpName, 0o755); err != nil {
-		return err
-	}
-	if runtime.GOOS == "windows" {
-		old := target + ".old"
-		_ = os.Remove(old)
-		if err := os.Rename(target, old); err != nil {
-			return err
-		}
-		if err := os.Rename(tmpName, target); err != nil {
-			_ = os.Rename(old, target) // roll back
-			return err
-		}
-		return nil
-	}
-	return os.Rename(tmpName, target)
+// newFile is one file an update installs.
+type newFile struct {
+	target string
+	data   []byte
 }
 
-// CleanupOld removes leftover <exe>.old files from a previous Windows update.
+// replaceFile installs one file (AppImage, single binaries).
+func replaceFile(target string, data []byte) error {
+	return replaceFiles([]newFile{{target, data}})
+}
+
+// replaceFiles installs all files or none. Every new file is written next to
+// its target first; then each target is swapped. A running executable can't
+// be overwritten on Windows but can be renamed, so the old file moves aside
+// (see asideName; removed on a later start by CleanupOld). If any swap
+// fails, the ones already done are put back.
+func replaceFiles(files []newFile) (err error) {
+	type staged struct{ target, tmp, aside string }
+	var st []staged
+	defer func() {
+		for _, s := range st {
+			_ = os.Remove(s.tmp) // no-op once renamed into place
+		}
+	}()
+	for _, f := range files {
+		tmp, err := writeTemp(f.target, f.data)
+		if err != nil {
+			return err
+		}
+		st = append(st, staged{target: f.target, tmp: tmp})
+	}
+
+	done := 0
+	defer func() {
+		if err == nil {
+			return
+		}
+		// Roll back in reverse so the install is never half-updated.
+		for i := done - 1; i >= 0; i-- {
+			s := st[i]
+			if s.aside == "" {
+				continue
+			}
+			_ = os.Remove(s.target)
+			_ = os.Rename(s.aside, s.target)
+		}
+	}()
+	for i := range st {
+		s := &st[i]
+		if runtime.GOOS == "windows" {
+			s.aside = asideName(s.target)
+			if err := os.Rename(s.target, s.aside); err != nil {
+				return fmt.Errorf("can't move %s aside: %w", filepath.Base(s.target), err)
+			}
+			if err := os.Rename(s.tmp, s.target); err != nil {
+				_ = os.Rename(s.aside, s.target)
+				return err
+			}
+		} else if err := os.Rename(s.tmp, s.target); err != nil {
+			return err
+		}
+		done = i + 1
+	}
+	return nil
+}
+
+func writeTemp(target string, data []byte) (string, error) {
+	tmp, err := os.CreateTemp(filepath.Dir(target), filepath.Base(target)+".new-*")
+	if err != nil {
+		return "", fmt.Errorf("can't write next to %s (try running as the user who installed it): %w", target, err)
+	}
+	name := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(name)
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(name)
+		return "", err
+	}
+	if err := os.Chmod(name, 0o755); err != nil {
+		os.Remove(name)
+		return "", err
+	}
+	return name, nil
+}
+
+// asideName picks where a replaced file goes: <name>.old, or a unique
+// <name>.old-<n> when an earlier .old is still locked (e.g. a tray icon
+// still running from a previous version).
+func asideName(target string) string {
+	old := target + ".old"
+	if err := os.Remove(old); err == nil || errors.Is(err, os.ErrNotExist) {
+		return old
+	}
+	return fmt.Sprintf("%s.old-%d", target, time.Now().UnixNano())
+}
+
+// CleanupOld removes files set aside by earlier updates (and any staged
+// files an interrupted update left), skipping those still in use.
 func CleanupOld() {
-	if exe, err := os.Executable(); err == nil {
-		_ = os.Remove(exe + ".old")
-		_ = os.Remove(filepath.Join(filepath.Dir(exe), "pc_monitor.exe.old"))
-		_ = os.Remove(filepath.Join(filepath.Dir(exe), "pc_monitor-app.exe.old"))
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cleanupDir(filepath.Dir(exe))
+}
+
+func cleanupDir(dir string) {
+	for _, pat := range []string{"pc_monitor*.old", "pc_monitor*.old-*", "pc_monitor*.new-*"} {
+		matches, _ := filepath.Glob(filepath.Join(dir, pat))
+		for _, m := range matches {
+			_ = os.Remove(m)
+		}
 	}
 }

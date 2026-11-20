@@ -76,6 +76,24 @@ func StartDetached() (int, error) {
 	return pid, nil
 }
 
+// StartTray launches `<exe> tray` detached (used by the tray to relaunch
+// itself from an updated executable).
+func StartTray() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(exe, "tray")
+	if p := os.Getenv("APPIMAGE"); p != "" {
+		cmd = exec.Command(p, "tray")
+	}
+	cmd.SysProcAttr = detachedAttr()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
+}
+
 // OpenBrowser opens a URL in the default browser.
 func OpenBrowser(url string) error {
 	var cmd *exec.Cmd
