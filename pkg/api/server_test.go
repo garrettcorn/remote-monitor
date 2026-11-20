@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -266,5 +267,77 @@ func TestDeckAppsEndpoint(t *testing.T) {
 	w = do(t, h, "GET", "/api/deck/apps", "", tok)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"OBS Studio"`) {
 		t.Fatalf("apps: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDisplayInputEndpoint(t *testing.T) {
+	if !display.CaptureSupported() || !display.InputSupported() {
+		t.Skip("remote input unsupported on this platform")
+	}
+	collector := telemetry.NewCollector(500 * time.Millisecond)
+	newSrv := func(opts Options) (*Server, http.Handler, map[string]string, *[]string) {
+		srv := NewServer("test-server", "secret-token", collector, opts)
+		var got []string
+		// Never touch the real mouse/keyboard in tests.
+		srv.doPointer = func(i int, e display.PointerEvent) error {
+			got = append(got, fmt.Sprintf("%s %d %.2f %.2f %s %d", e.Type, i, e.X, e.Y, e.Button, e.DY))
+			return nil
+		}
+		srv.doDeck = func(a deck.Action, _ string) error { got = append(got, a.Type+" "+a.Keys+a.Text); return nil }
+		h := srv.Handler()
+		auth := map[string]string{"X-Pairing-Token": "secret-token"}
+		if opts.PIN != nil {
+			w := do(t, h, "POST", "/api/pair", `{"pin":"`+opts.PIN.Current()+`"}`, auth)
+			var pair struct {
+				Session string `json:"session"`
+			}
+			_ = json.Unmarshal(w.Body.Bytes(), &pair)
+			auth["X-Session"] = pair.Session
+		}
+		return srv, h, auth, &got
+	}
+
+	pin, _ := control.NewPIN(nil)
+	_, h, auth, got := newSrv(Options{PIN: pin})
+	if w := do(t, h, "GET", "/api/health", "", nil); !strings.Contains(w.Body.String(), `"remote_input":true`) {
+		t.Fatalf("health should report remote_input: %s", w.Body.String())
+	}
+	for _, body := range []string{
+		`{"index":1,"type":"click","x":0.5,"y":0.25}`,
+		`{"index":0,"type":"scroll","x":0,"y":1,"dy":99}`,
+		`{"type":"key","keys":"ctrl+c"}`,
+		`{"type":"text","text":"hi"}`,
+	} {
+		if w := do(t, h, "POST", "/api/display/input", body, auth); w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", body, w.Code, w.Body.String())
+		}
+	}
+	want := []string{"click 1 0.50 0.25 left 0", "scroll 0 0.00 1.00 left 10", "hotkey ctrl+c", "text hi"}
+	if fmt.Sprint(*got) != fmt.Sprint(want) {
+		t.Fatalf("got %q, want %q", *got, want)
+	}
+	for _, bad := range []string{
+		`{"type":"click","x":1.5,"y":0}`,
+		`{"type":"click","x":0,"y":0,"button":"thumb"}`,
+		`{"type":"teleport","x":0,"y":0}`,
+	} {
+		if w := do(t, h, "POST", "/api/display/input", bad, auth); w.Code != http.StatusBadRequest {
+			t.Fatalf("%s accepted: %d", bad, w.Code)
+		}
+	}
+	// Needs a PIN session.
+	if w := do(t, h, "POST", "/api/display/input", `{"type":"move","x":0,"y":0}`, map[string]string{"X-Pairing-Token": "secret-token"}); w.Code != http.StatusUnauthorized {
+		t.Fatalf("input without session: %d", w.Code)
+	}
+	// -no-screen disables it.
+	pin2, _ := control.NewPIN(nil)
+	_, h2, auth2, got2 := newSrv(Options{PIN: pin2, NoScreen: true})
+	if w := do(t, h2, "POST", "/api/display/input", `{"type":"move","x":0,"y":0}`, auth2); w.Code != http.StatusForbidden || len(*got2) != 0 {
+		t.Fatalf("input with -no-screen: %d", w.Code)
+	}
+	// Read-only servers refuse it.
+	_, h3, _, _ := newSrv(Options{ReadOnly: true})
+	if w := do(t, h3, "POST", "/api/display/input?token=secret-token", `{"type":"move","x":0,"y":0}`, nil); w.Code != http.StatusForbidden {
+		t.Fatalf("input on read-only: %d", w.Code)
 	}
 }

@@ -1,4 +1,4 @@
-// Package deck implements Stream Deck-style button actions on the host:
+// Package deck implements Control Panel button actions on the host:
 // media keys, keyboard shortcuts, lock screen, mic mute, opening URLs and
 // launching apps from a server-side allowlist.
 package deck

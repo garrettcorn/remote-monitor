@@ -1,8 +1,8 @@
-// Dashboard customization (show/hide sections) and the Stream Deck-style
-// button grid in the Control Panel.
+// Dashboard customization (show/hide sections) and the Control Panel
+// button grid.
 
-import { UI } from './ui.js?v=17';
-import { MonitorClient } from './client.js?v=17';
+import { UI } from './ui.js?v=19';
+import { MonitorClient } from './client.js?v=19';
 
 const esc = UI.esc;
 
@@ -685,12 +685,19 @@ export class Screens {
     this.app = app;
     this.server = null;
     this.captureEnabled = false;
+    this.inputEnabled = false;
     this.displays = [];
     this.signature = '';
     this.images = {};     // display index -> object URL
     this.capturedAt = {}; // display index -> Date
     this.busy = false;
     this.viewing = -1;    // index shown in the full-size viewer
+    this.controlling = false;
+    this.inputQueue = [];
+    this.sending = false;
+    this.wheelAccum = 0;
+    this.lastMoveAt = 0;
+    this.liveTimer = null;
     this.autoRefresh = load(AUTOREFRESH_KEY, false) === true;
     this.timer = setInterval(() => this.tick(), REFRESH_MS);
     this.bind();
@@ -708,10 +715,43 @@ export class Screens {
     }
     document.getElementById('btn-screen-capture')?.addEventListener('click', () => this.captureAll());
     document.getElementById('displays-container')?.addEventListener('click', (e) => {
+      const saveBtn = e.target.closest('[data-save]');
+      if (saveBtn) {
+        e.stopPropagation();
+        this.saveCapture(parseInt(saveBtn.dataset.save, 10));
+        return;
+      }
       const prev = e.target.closest('.screen-preview[data-index]');
       if (prev && this.images[prev.dataset.index]) this.openViewer(parseInt(prev.dataset.index, 10));
     });
-    document.querySelectorAll('#screen-modal .modal-close-btn').forEach(b => b.addEventListener('click', () => { this.viewing = -1; }));
+    document.querySelectorAll('#screen-modal .modal-close-btn').forEach(b => b.addEventListener('click', () => this.closeViewer()));
+
+    // Viewer toolbar
+    document.getElementById('btn-screen-save')?.addEventListener('click', () => this.saveCapture(this.viewing));
+    document.getElementById('btn-screen-refresh')?.addEventListener('click', () => this.refreshViewing());
+    document.getElementById('screen-control')?.addEventListener('change', (e) => this.setControlling(e.target.checked));
+    document.querySelectorAll('#screen-control-bar [data-send-keys]').forEach(b =>
+      b.addEventListener('click', () => this.queueInput({ type: 'key', keys: b.dataset.sendKeys })));
+
+    // Remote control: pointer + wheel on the image, keys anywhere in the viewer.
+    const img = document.getElementById('screen-modal-img');
+    if (img) {
+      img.addEventListener('pointerdown', (e) => this.onPointer(e, 'down'));
+      img.addEventListener('pointerup', (e) => this.onPointer(e, 'up'));
+      img.addEventListener('pointermove', (e) => this.onPointer(e, 'move'));
+      img.addEventListener('contextmenu', (e) => { if (this.controlling) e.preventDefault(); });
+      img.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+      img.addEventListener('dblclick', (e) => { if (this.controlling) e.preventDefault(); });
+    }
+    // Capture phase so the dashboard's own shortcuts never see forwarded keys.
+    window.addEventListener('keydown', (e) => this.onKey(e), true);
+    const typeBox = document.getElementById('screen-type');
+    typeBox?.addEventListener('input', () => {
+      // Soft keyboards (no usable keydown) land here; desktop keys are sent by onKey.
+      if (typeBox.value) this.queueInput({ type: 'text', text: typeBox.value });
+      typeBox.value = '';
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.scheduleLive(0); });
   }
 
   clearImages() {
@@ -720,10 +760,15 @@ export class Screens {
     this.capturedAt = {};
   }
 
-  setServer(server, captureEnabled) {
-    if (this.server?.id !== server?.id) this.clearImages();
+  setServer(server, captureEnabled, inputEnabled) {
+    if (this.server?.id !== server?.id) {
+      this.clearImages();
+      this.closeViewer();
+    }
     this.server = server;
     this.captureEnabled = !!captureEnabled;
+    this.inputEnabled = !!captureEnabled && !!inputEnabled;
+    if (!this.inputEnabled) this.setControlling(false);
     this.signature = '';
     const toggle = document.getElementById('screen-autorefresh');
     const btn = document.getElementById('btn-screen-capture');
@@ -744,7 +789,11 @@ export class Screens {
 
   placeholder() {
     if (!this.server) return '';
-    if (this.captureEnabled) return 'Click Capture to see what is on this display';
+    if (this.captureEnabled) {
+      return this.inputEnabled
+        ? 'Click Capture to see this display, then open it to save or control it'
+        : 'Click Capture to see what is on this display';
+    }
     if (!this.server.controlEnabled) return 'Screen preview needs a PIN-paired server (not available in read-only mode)';
     return 'Screen preview is turned off or not supported on this server';
   }
@@ -764,6 +813,7 @@ export class Screens {
       const device = (d.device || '').split('\\').filter(Boolean).pop() || '';
       const img = this.images[d.index];
       const at = this.capturedAt[d.index];
+      const title = this.inputEnabled ? 'Open larger, save or control' : 'Open larger or save';
       return `
         <div class="display-card">
           <div class="display-head">
@@ -774,8 +824,9 @@ export class Screens {
             <div class="sub-text">${facts.join(' · ')}${device ? ' · ' + esc(device) : ''}</div>
           </div>
           <div class="screen-preview ${img ? 'has-image' : ''}" data-index="${d.index}" style="aspect-ratio: ${d.width || 16} / ${d.height || 9}"
-               ${img ? `role="button" tabindex="0" title="Open larger"` : ''}>
+               ${img ? `role="button" tabindex="0" title="${title}"` : ''}>
             ${img ? `<img src="${img}" alt="Screen of ${esc(d.name)}">` : `<span class="sub-text">${esc(this.placeholder())}</span>`}
+            ${img ? `<button class="screen-save-btn" data-save="${d.index}" title="Save a full-resolution capture">Save</button>` : ''}
             ${at ? `<span class="screen-time">${at.toLocaleTimeString()}</span>` : ''}
           </div>
         </div>`;
@@ -784,9 +835,37 @@ export class Screens {
 
   // Auto-refresh tick: only while enabled, visible and on the dashboard.
   tick() {
-    if (!this.autoRefresh || !this.captureEnabled || document.hidden) return;
+    if (!this.autoRefresh || !this.captureEnabled || document.hidden || this.controlling) return;
     if (Layout.isHidden('displays') || this.app.currentView !== 'dashboard') return;
     this.captureAll();
+  }
+
+  // Fetch one JPEG; throws Error with .code on failure.
+  async fetchCapture(server, index, width) {
+    const url = `${MonitorClient.baseURL(server)}/api/display/screenshot?index=${index}&width=${width}`;
+    const resp = await fetch(url, { headers: MonitorClient.authHeaders(server), cache: 'no-store' });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      const err = new Error(body.message || `HTTP ${resp.status}`);
+      err.code = body.error;
+      throw err;
+    }
+    return resp.blob();
+  }
+
+  setImage(index, blob) {
+    if (this.images[index]) URL.revokeObjectURL(this.images[index]);
+    this.images[index] = URL.createObjectURL(blob);
+    this.capturedAt[index] = new Date();
+  }
+
+  captureFailed(server, e) {
+    if (e.code === 'screen_disabled') {
+      this.captureEnabled = false;
+      this.autoRefresh = false;
+      this.setServer(server, false, false);
+    }
+    this.app.handleControlError(server, e);
   }
 
   async captureAll() {
@@ -797,32 +876,62 @@ export class Screens {
     const server = this.server;
     try {
       for (const d of this.displays) {
-        const url = `${MonitorClient.baseURL(server)}/api/display/screenshot?index=${d.index}&width=1280`;
-        const resp = await fetch(url, { headers: MonitorClient.authHeaders(server), cache: 'no-store' });
-        if (!resp.ok) {
-          const body = await resp.json().catch(() => ({}));
-          const err = new Error(body.message || `HTTP ${resp.status}`);
-          err.code = body.error;
-          throw err;
-        }
-        const blob = await resp.blob();
+        const blob = await this.fetchCapture(server, d.index, 1280);
         if (this.server !== server) return; // switched servers meanwhile
-        if (this.images[d.index]) URL.revokeObjectURL(this.images[d.index]);
-        this.images[d.index] = URL.createObjectURL(blob);
-        this.capturedAt[d.index] = new Date();
-        if (this.viewing === d.index) this.openViewer(d.index);
+        this.setImage(d.index, blob);
+        if (this.viewing === d.index) this.showViewerImage();
       }
       this.render();
     } catch (e) {
-      if (e.code === 'screen_disabled') {
-        this.captureEnabled = false;
-        this.autoRefresh = false;
-        this.setServer(server, false);
-      }
-      this.app.handleControlError(server, e);
+      this.captureFailed(server, e);
     } finally {
       this.busy = false;
       if (btn) btn.textContent = 'Capture';
+    }
+  }
+
+  // Capture just the display in the viewer (Refresh button, live control).
+  async refreshViewing() {
+    const index = this.viewing;
+    if (index < 0 || !this.server || !this.captureEnabled || this.busy) return false;
+    this.busy = true;
+    const server = this.server;
+    const d = this.displays.find(x => x.index === index);
+    // Live frames are sized for the viewer; the card previews stay at 1280.
+    const width = Math.min(d?.width || 1600, 1600);
+    try {
+      const blob = await this.fetchCapture(server, index, width);
+      if (this.server !== server || this.viewing !== index) return false;
+      this.setImage(index, blob);
+      this.showViewerImage();
+      return true;
+    } catch (e) {
+      this.setControlling(false);
+      this.captureFailed(server, e);
+      return false;
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  // Download a fresh capture at the display's native resolution.
+  async saveCapture(index) {
+    if (index < 0 || !this.server || !this.captureEnabled) return;
+    const server = this.server;
+    const d = this.displays.find(x => x.index === index);
+    try {
+      const blob = await this.fetchCapture(server, index, d?.width || 3840);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = captureFilename(server.name, d?.name || `display${index + 1}`, new Date());
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      this.app.showToast('Capture saved');
+    } catch (e) {
+      this.captureFailed(server, e);
     }
   }
 
@@ -830,10 +939,175 @@ export class Screens {
     const d = this.displays.find(x => x.index === index);
     this.viewing = index;
     document.getElementById('screen-modal-title').textContent = d ? d.name : 'Display';
-    document.getElementById('screen-modal-img').src = this.images[index];
-    const at = this.capturedAt[index];
-    document.getElementById('screen-modal-time').textContent = at
-      ? `Captured ${at.toLocaleTimeString()}${this.autoRefresh ? ' · refreshing every 10 s' : ''}` : '';
+    const label = document.getElementById('screen-control-label');
+    if (label) label.classList.toggle('hidden', !this.inputEnabled);
+    const ctl = document.getElementById('screen-control');
+    if (ctl) ctl.checked = this.controlling;
+    this.showViewerImage();
     document.getElementById('screen-modal').classList.remove('hidden');
   }
+
+  closeViewer() {
+    this.setControlling(false);
+    this.viewing = -1;
+    document.getElementById('screen-modal')?.classList.add('hidden');
+  }
+
+  showViewerImage() {
+    const index = this.viewing;
+    if (index < 0) return;
+    const img = document.getElementById('screen-modal-img');
+    if (img && this.images[index]) img.src = this.images[index];
+    const at = this.capturedAt[index];
+    let note = at ? `Captured ${at.toLocaleTimeString()}` : '';
+    if (this.controlling) note = at ? `Live · ${at.toLocaleTimeString()}` : 'Live';
+    else if (at && this.autoRefresh) note += ' · refreshing every 10 s';
+    document.getElementById('screen-modal-time').textContent = note;
+  }
+
+  // ------------------------------------------------------- remote control
+
+  setControlling(on) {
+    on = !!on && this.inputEnabled && this.viewing >= 0;
+    this.controlling = on;
+    const ctl = document.getElementById('screen-control');
+    if (ctl) ctl.checked = on;
+    document.getElementById('screen-stage')?.classList.toggle('is-controlling', on);
+    document.getElementById('screen-control-bar')?.classList.toggle('hidden', !on);
+    document.getElementById('screen-control-hint')?.classList.toggle('hidden', !on);
+    if (!on) {
+      this.inputQueue = [];
+      clearTimeout(this.liveTimer);
+      this.liveTimer = null;
+    } else {
+      document.getElementById('screen-stage')?.focus?.();
+      this.scheduleLive(0);
+    }
+    this.showViewerImage();
+  }
+
+  // Live view while controlling: a new frame as soon as the last one lands
+  // (a little sooner after input), paused while the tab is hidden.
+  scheduleLive(delay) {
+    if (!this.controlling) return;
+    clearTimeout(this.liveTimer);
+    this.liveTimer = setTimeout(async () => {
+      this.liveTimer = null;
+      if (!this.controlling || document.hidden) return;
+      if (this.busy) { this.scheduleLive(100); return; }
+      await this.refreshViewing();
+      this.scheduleLive(LIVE_FRAME_MS);
+    }, delay);
+  }
+
+  // Map a pointer event to 0..1 coordinates on the screen image, allowing
+  // for object-fit: contain letterboxing.
+  pointToScreen(e) {
+    const img = e.currentTarget;
+    const r = img.getBoundingClientRect();
+    const nw = img.naturalWidth || r.width;
+    const nh = img.naturalHeight || r.height;
+    const scale = Math.min(r.width / nw, r.height / nh);
+    const w = nw * scale, h = nh * scale;
+    const x = (e.clientX - r.left - (r.width - w) / 2) / w;
+    const y = (e.clientY - r.top - (r.height - h) / 2) / h;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+    return { x, y };
+  }
+
+  onPointer(e, type) {
+    if (!this.controlling) return;
+    const p = this.pointToScreen(e);
+    if (!p) return;
+    e.preventDefault();
+    if (type === 'move') {
+      const now = performance.now();
+      if (now - this.lastMoveAt < MOVE_INTERVAL_MS) return;
+      this.lastMoveAt = now;
+    } else if (type === 'down') {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
+    const button = ['left', 'middle', 'right'][e.button] || 'left';
+    this.queueInput({ index: this.viewing, type, x: p.x, y: p.y, button });
+  }
+
+  onWheel(e) {
+    if (!this.controlling) return;
+    const p = this.pointToScreen(e);
+    if (!p) return;
+    e.preventDefault();
+    // ~100 px (or 3 lines) per wheel notch.
+    this.wheelAccum += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 800 : e.deltaY;
+    const notches = Math.trunc(this.wheelAccum / 100);
+    if (!notches) return;
+    this.wheelAccum -= notches * 100;
+    this.queueInput({ index: this.viewing, type: 'scroll', x: p.x, y: p.y, dy: notches });
+  }
+
+  onKey(e) {
+    if (!this.controlling || e.isComposing) return;
+    if (['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'Unidentified', 'Process', 'Dead'].includes(e.key)) return;
+    const typeBox = document.getElementById('screen-type');
+    // Plain printable characters go as text so layouts and symbols survive.
+    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const last = this.inputQueue[this.inputQueue.length - 1];
+      if (last && last.type === 'text' && last.text.length < 200) last.text += e.key;
+      else this.queueInput({ type: 'text', text: e.key });
+      return;
+    }
+    const { mods, key } = shortcutFromEvent(e);
+    if (!key) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.target === typeBox) typeBox.value = '';
+    this.queueInput({ type: 'key', keys: [...mods, key].join('+') });
+  }
+
+  // Inputs are sent one at a time, in order. Consecutive moves collapse to
+  // the latest so a slow link never builds a backlog.
+  queueInput(ev) {
+    if (!this.controlling || !this.server) return;
+    const last = this.inputQueue[this.inputQueue.length - 1];
+    if (ev.type === 'move' && last && last.type === 'move') this.inputQueue[this.inputQueue.length - 1] = ev;
+    else this.inputQueue.push(ev);
+    this.pumpInput();
+  }
+
+  async pumpInput() {
+    if (this.sending) return;
+    this.sending = true;
+    const server = this.server;
+    try {
+      while (this.inputQueue.length && this.controlling && this.server === server) {
+        const ev = this.inputQueue.shift();
+        await MonitorClient.post(server, '/api/display/input', ev);
+        if (ev.type !== 'move') this.scheduleLive(INPUT_FRAME_MS);
+      }
+    } catch (e) {
+      this.setControlling(false);
+      if (e.code === 'input_disabled') {
+        this.inputEnabled = false;
+        document.getElementById('screen-control-label')?.classList.add('hidden');
+        this.app.showToast('Remote control is disabled on this server');
+      } else {
+        this.app.handleControlError(server, e);
+      }
+    } finally {
+      this.sending = false;
+    }
+  }
+}
+
+const LIVE_FRAME_MS = 250;   // pause between live frames while controlling
+const INPUT_FRAME_MS = 120;  // next frame this soon after a click or key
+const MOVE_INTERVAL_MS = 50; // at most ~20 pointer moves per second
+
+// "Office PC-DELL U2720Q-2026-11-20-153012.jpg"
+function captureFilename(serverName, displayName, at) {
+  const clean = (s) => String(s || '').replace(/[^A-Za-z0-9 ._-]+/g, ' ').trim().replace(/\s+/g, ' ').slice(0, 60);
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}-${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
+  return [clean(serverName), clean(displayName), stamp].filter(Boolean).join('-') + '.jpg';
 }

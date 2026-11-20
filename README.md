@@ -69,6 +69,7 @@ When the server starts, it automatically outputs:
 | **Connected devices** | ✅ PowerShell `Get-PnpDevice` + device-reported USB names (`DEVPKEY_Device_BusReportedDeviceDesc`); USB, Bluetooth, monitors | 🟡 USB only via `lsusb` | ❌ |
 | **Displays (resolution, refresh, scale)** | ✅ `EnumDisplayMonitors`, `EnumDisplaySettingsW`, `GetDpiForMonitor`; model names from WMI `WmiMonitorID` | 🟡 `xrandr --query` (X11) | ✅ `system_profiler SPDisplaysDataType` |
 | **Screen preview** | ✅ GDI `BitBlt` per monitor (DPI-aware), downscaled JPEG | ❌ | 🟡 built-in `screencapture` (needs Screen Recording permission) |
+| **Remote control (mouse & keyboard)** | ✅ `SetCursorPos` + `SendInput` (mouse buttons, wheel, keys, Unicode text) | 🟡 `xdotool` (X11); no screen view yet | ❌ |
 | **Audio: list, volume, mute** | ✅ Core Audio (`IMMDeviceEnumerator`, `IAudioEndpointVolume`) | 🟡 `pactl` (PulseAudio/PipeWire, pactl 16+) | 🟡 AppleScript `set volume`: system output/input only, output mute only |
 | **Audio: switch default device** | ✅ `IPolicyConfig` (the interface behind the Sound control panel) | 🟡 `pactl set-default-sink/source` | ❌ |
 | **Buttons: media & volume keys** | ✅ `SendInput` virtual keys | 🟡 `xdotool key XF86Audio…` (X11) | ❌ |
@@ -119,11 +120,14 @@ AppImages need FUSE 2 on some distributions (`sudo apt install libfuse2`); other
 | `pc_monitor autostart on` / `off` | Start when you log in (inside your desktop session, so screen, audio and button features work) |
 | `pc_monitor config list` / `set <key> <value>` | View or change saved settings (`~/.pc_monitor/config.json`) |
 | `pc_monitor update` / `update --check` | Install or check for the latest release |
+| `pc_monitor update --auto on` / `off` | Install new releases automatically (checks every 6 hours) |
 | `pc_monitor tray` | Show the tray / menu-bar icon |
 
 ### Updates
 
-The server checks GitHub for new releases once a day (turn this off in settings). When one is available you can install it from the **settings page**, the **tray menu**, the **dashboard** ("Update to vX" next to the server version, for PIN-paired dashboards) or `pc_monitor update`.
+The server checks GitHub for new releases every 6 hours (turn this off in settings). When one is available you can install it from the **settings page**, the **tray menu**, the **dashboard** or `pc_monitor update`. On PIN-paired dashboards, **Check for updates** next to the server version asks the server to look right away; if there's a newer release it becomes **Update to vX**, and the dashboard waits for the server to restart and reconnects on its own.
+
+**Automatic updates** (off by default): turn on **Install updates automatically** in the settings page or tray menu, or run `pc_monitor update --auto on`. The server then installs new signed releases by itself and restarts (dashboards are offline for a few seconds and reconnect). Turning it on checks immediately. Dashboards show **Auto-update on** next to the version. Copies installed by a package manager (Homebrew, Scoop, `.deb`/`.rpm`) can't replace their own files, so use the package manager there.
 
 Every release's `checksums.txt` is signed with the project's ed25519 key. The updater only installs a download whose signature verifies against the key built into PC Monitor **and** whose SHA-256 matches. Homebrew and Scoop installs are updated with `brew upgrade` / `scoop update`. Installs from a `.deb` or `.rpm` show where to download the new package.
 
@@ -174,9 +178,9 @@ Pairings are remembered: the pairing token and paired sessions are saved in `~/.
 
 Start the server with `-read-only` for monitoring only: control is disabled and no PIN is needed.
 
-### Control Panel & Stream Deck Buttons
+### Control Panel Buttons
 
-The **Control Panel** at the top of the dashboard holds a Stream Deck-style button grid, audio controls (output/input device, volume, mute) and power controls (**Lock, Sleep, Restart, Shut down**). The mute and mic-mute buttons light up while muted.
+The **Control Panel** at the top of the dashboard holds a customizable button grid, audio controls (output/input device, volume, mute) and power controls (**Lock, Sleep, Restart, Shut down**). The mute and mic-mute buttons light up while muted.
 
 Click **Edit** on the button grid to add, edit, delete or drag-to-reorder buttons. The editor has five tabs:
 
@@ -210,12 +214,14 @@ The **Displays** section lists each connected display with its model name, resol
 - Nothing is captured until you ask: click **Capture** for a one-off snapshot.
 - Turn on **Auto-refresh** to capture every 10 seconds (off by default, remembered in this browser). It pauses while the tab is hidden or the section is hidden.
 - Click a preview to open it larger. Images are scaled to 1280 px wide JPEGs (about 100 KB each).
+- **Save** (on a preview or in the viewer) downloads a fresh full-resolution capture as a JPEG named after the server, display and time.
+- **Remote control**: in the viewer, switch on **Remote control** to use the host's mouse and keyboard. The view refreshes several times a second while it's on; clicks, right-clicks, dragging, scrolling and typing go to that display. Use the **Type to send** box on phones and tablets, and the **Win**, **Alt+Tab** and **Esc** buttons for keys your browser keeps for itself. Closing the viewer turns control off.
 
-Screen preview is never available in `-read-only` mode, and `-no-screen` disables it entirely.
+Screen preview and remote control are never available in `-read-only` mode, and `-no-screen` disables both. Remote control works on Windows (and Linux X11 with `xdotool`, where screen capture isn't available yet); it is not supported on macOS. A server that isn't running as administrator can't click or type into windows that are (Windows blocks it).
 
 ### Customize the Dashboard
 
-Click the **sliders icon** in the header to show or hide any section (CPU, memory, Stream Deck, audio, power, drive health, processes, and so on). Hidden cards leave no gaps, and your choices are saved in this browser.
+Click the **sliders icon** in the header to show or hide any section (CPU, memory, buttons, audio, power, drive health, processes, and so on). Hidden cards leave no gaps, and your choices are saved in this browser.
 
 ---
 
@@ -323,7 +329,7 @@ Flags apply to `pc_monitor run` (the default command). They override the saved s
 | `-save` | `false` | Save the given flags as the new defaults |
 | `-read-only` | `false` | Monitoring only: disable remote control (audio, shutdown/restart); dashboards connect without a PIN |
 | `-reset-pairing` | `false` | Revoke all paired dashboards: new pairing token and cleared PIN sessions |
-| `-no-screen` | `false` | Disable screen capture previews (displays are still listed) |
+| `-no-screen` | `false` | Disable screen capture previews and remote control (displays are still listed) |
 | `-verbose` | `false` | Enable detailed debug logs for networking and telemetry |
 
 ---
@@ -382,5 +388,5 @@ pc_monitor/
 - **Plain HTTP on the LAN port**: The direct port (`-port`, default `9120`) is unencrypted HTTP. Prefer Tailscale/Tailcat or a trusted network when control is enabled.
 - **Local settings page**: served only on `127.0.0.1`, rejects requests whose `Host` isn't localhost (DNS-rebinding protection), and every action needs the key in `~/.pc_monitor/settings_key` (owner-only). `pc_monitor settings` and the tray pass the key in the URL fragment, which browsers never send to servers.
 - **Signed updates**: the self-updater installs a release only if `checksums.txt.sig` verifies against the ed25519 public key compiled into PC Monitor and the download's SHA-256 matches.
-- **Screen previews are sensitive**: they're only served to PIN-paired dashboards, never in `-read-only` mode, and are only captured on request or while auto-refresh is on. Use `-no-screen` to turn them off.
+- **Screen previews and remote control are sensitive**: they're only available to PIN-paired dashboards, never in `-read-only` mode; screens are only captured on request, while auto-refresh is on or while the viewer is in Remote control. Use `-no-screen` to turn both off.
 - **SMART details need elevation**: Drive health status works for any user; temperature, wear and error counters require running the server as administrator (Windows) or root with `smartctl` (Linux).

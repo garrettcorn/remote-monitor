@@ -16,7 +16,7 @@ A cross-platform **PC system monitor and remote control** with two components:
 | **Server** | Go binary (single static executable) | Windows / Linux / macOS (Android via Termux `linux/arm64`) |
 | **Client** | 100% static web app (no build step) | GitHub Pages: `https://garrettcorn.github.io/remote-monitor/` |
 
-The server collects telemetry (CPU incl. per-core, GPU, thermals, RAM, drives + I/O, physical drive health/SMART, network + per-adapter rates, processes, connected devices, audio devices, battery, signed-in users) and serves it over HTTP REST + WebSocket. By default it also allows **remote control** (audio volume/mute/default device, Stream Deck-style button actions, shutdown/restart), gated by a **one-time PIN** shown on the server console. `-read-only` disables control. The dashboard has a **Control Panel** (button grid + audio + power) and a **Customize** dialog to show/hide sections.
+The server collects telemetry (CPU incl. per-core, GPU, thermals, RAM, drives + I/O, physical drive health/SMART, network + per-adapter rates, processes, connected devices, audio devices, battery, signed-in users) and serves it over HTTP REST + WebSocket. By default it also allows **remote control** (audio volume/mute/default device, Control Panel button actions, shutdown/restart), gated by a **one-time PIN** shown on the server console. `-read-only` disables control. The dashboard has a **Control Panel** (button grid + audio + power) and a **Customize** dialog to show/hide sections.
 
 Dashboards pair via a link/QR code containing the server's pairing token and direct URL. The browser stores paired servers in `localStorage` (fleet view supports multiple servers).
 
@@ -48,7 +48,7 @@ pc_monitor/
 │   │   └── audio_other.go          # unsupported
 │   ├── power/power.go              # shutdown/restart (Windows `shutdown /t 5`; systemctl; osascript)
 │   │   (sleep_windows.go: SetSuspendState + SeShutdownPrivilege; sleep_other.go: systemctl suspend / pmset sleepnow)
-│   ├── deck/                       # Stream Deck button actions
+│   ├── deck/                       # Control Panel button actions
 │   │   ├── deck.go                 # Action types, hotkey parsing, URL validation, launch allowlist (actions.json)
 │   │   ├── input_windows.go        # SendInput (media keys, hotkeys), LockWorkStation, ShellExecute
 │   │   ├── input_linux.go          # xdotool / loginctl / xdg-open (X11)
@@ -72,9 +72,9 @@ pc_monitor/
 │   ├── pairing/                    # Token gen, pairing URL, HTML card, pure-Go QR encoder + ANSI/SVG render
 │   └── tailcat/tunnel.go           # StartTunnel(): key persistence, DERP bootstrap
 ├── web/                            # Static client, deployed to GitHub Pages as-is
-│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=16); sections tagged data-section="…"
+│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=19); sections tagged data-section="…"
 │   ├── style.css                   # "Liquid Glass" theme, light + dark
-│   └── js/ app.js, client.js, ui.js, panel.js (Customize + Stream Deck), storage.js, charts.js, qr-scanner.js
+│   └── js/ app.js, client.js, ui.js, panel.js (Customize + Control Panel buttons), storage.js, charts.js, qr-scanner.js
 ├── scripts/                        # build.ps1/.sh (cross-compile), release.ps1/.sh (local packaging)
 ├── .github/workflows/              # ci.yml, deploy-pages.yml, release.yml
 ├── CHANGELOG.md                    # Common Changelog format
@@ -110,9 +110,9 @@ No new third-party Go dependencies were added for audio/SMART/devices: Windows u
 | `v1.1.0` | QR encoder fixed (Reed-Solomon ECC, v1–40), dashboard render crash fixed, real Windows network counters, real per-core CPU / uptime / process stats / ACPI thermal zone, fake temperatures removed |
 | `v1.2.0` | Liquid Glass UI; **PIN-gated remote control** (audio, shutdown/restart), `-read-only`; drive health/SMART; connected devices; disk I/O, adapter rates/link speed, GPU fan/clocks/power limit, battery, users; HTML escaping of host-provided names |
 | `v1.2.1` | **Pairing persists across restarts** (token + session hashes in `~/.pc_monitor`), `-reset-pairing`, single pairing QR code |
-| `v1.3.0` | Control Panel with Stream Deck-style buttons (`pkg/deck`, `/api/deck/*`), Customize dialog to show/hide sections |
+| `v1.3.0` | Control Panel with buttons (`pkg/deck`, `/api/deck/*`), Customize dialog to show/hide sections |
 | `v1.3.1` | PIN auto-connect at 4 digits; SMART admin note only when the server is not elevated (`server_elevated`) |
-| `v1.4.0` | Displays section (list + screen preview with auto-refresh, `/api/display/screenshot`, `-no-screen`); "Stream Deck" label removed from the Control Panel; README per-OS feature table |
+| `v1.4.0` | Displays section (list + screen preview with auto-refresh, `/api/display/screenshot`, `-no-screen`); old button-grid label removed from the Control Panel; README per-OS feature table |
 
 All released tags have 7 release assets.
 
@@ -175,7 +175,7 @@ go build -o pc_monitor_server.exe ./cmd/server
 | `-export-html` | `pairing_card.html` | Pairing card with SVG QR (`""` to skip) |
 | `-read-only` | `false` | Disable control; no PIN needed |
 | `-reset-pairing` | `false` | Delete saved token + sessions (revokes all dashboards) |
-| `-no-screen` | `false` | Disable screen capture previews |
+| `-no-screen` | `false` | Disable screen capture previews and remote input |
 | `-verbose` | `false` | Debug logging |
 
 ### Pairing & access control
@@ -210,6 +210,7 @@ PIN: 4 digits (crypto/rand), constant-time compare, one-time; rotated after use 
 | `GET` | `/api/deck/apps` | token + session | Installed apps on the host (`id`, `name`), cached 5 min |
 | `POST` | `/api/deck/press` | token + session | `{type, key?, keys?, url?, id?, text?}`; type is `media`, `hotkey`, `lock`, `mic_mute`, `url`, `launch`, `app` or `text` |
 | `GET` | `/api/display/screenshot` | token + session | `?index=N&width=W` → `image/jpeg` (`no-store`); 403 `screen_disabled` with `-no-screen`; never in read-only |
+| `POST` | `/api/display/input` | token + session | `{index, type, x, y, button?, dx?, dy?}` pointer (`move`/`down`/`up`/`click`/`dblclick`/`scroll`, x/y 0–1 of that display) or `{type:"key", keys}` / `{type:"text", text}` (deck hotkey/text paths); 403 `input_disabled` unless `remote_input` |
 
 Token: `?token=`, `X-Pairing-Token`, or `Authorization: Bearer`. Session: `X-Session` or `?session=`.
 
@@ -252,12 +253,15 @@ Token: `?token=`, `X-Pairing-Token`, or `Authorization: Bearer`. Session: `X-Ses
 
 PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 s (`Collector.refreshSlow`), never on the 1.2 s sampling path.
 
-### Displays & screen preview (`pkg/display`, `Screens` in `web/js/panel.js`)
+### Displays, screen preview & remote control (`pkg/display`, `Screens` in `web/js/panel.js`)
 - `displays` is in every snapshot (cheap enumeration); Windows model names come from WMI `WmiMonitorID` in the 30 s slow refresh, matched via `Display.HardwareID`.
 - `/api/health` reports `screen_capture` (control enabled, not `-no-screen`, platform supported). The dashboard captures **only** on Capture or while Auto-refresh (default off, `localStorage[pc_monitor_screen_autorefresh]`) is on; ticks pause when the tab/section is hidden.
 - When testing, don't screenshot the dashboard after capturing: the preview contains the user's real screen. Verify captures by image size instead.
+- Viewer (`#screen-modal`): **Save** fetches `width=<native>` and downloads `<server>-<display>-<YYYY-MM-DD-HHMMSS>.jpg`. **Remote control** (shown when health `remote_input` = screen capture enabled + `display.InputSupported()`: Windows, Linux/xdotool) runs a live loop of 1600 px frames (250 ms gap, sooner after clicks/keys) and sends `/api/display/input` events through an ordered queue (consecutive moves collapse; moves ≤ 20/s). Keys are captured on `window` in the capture phase while controlling; printable keys go as `text`, others as `key` via `shortcutFromEvent`. Closing the viewer stops control.
+- Windows pointer input: `SetCursorPos` (physical px; process is per-monitor DPI aware) + `SendInput` `MOUSEINPUT` (40 bytes, guarded in `display_windows_test.go`). UIPI blocks input into elevated windows from a non-elevated server.
+- Testing remote control: stub `/api/display/input` and `/api/display/screenshot` in the page (`window.fetch` wrapper) so nothing real is clicked or captured; `server_test.go` stubs `Server.doPointer`/`doDeck`. Never send real pointer/key events to the dev desktop.
 
-### Stream Deck buttons (`pkg/deck`, `web/js/panel.js`)
+### Control Panel buttons (`pkg/deck`, `web/js/panel.js`)
 - Action types: `media` (play_pause/next/previous/stop/volume_up/volume_down/volume_mute), `hotkey` (`ctrl+shift+m`: modifiers ctrl/shift/alt/win + one key a–z, 0–9, f1–f24 or named), `lock`, `mic_mute`, `url` (http/https only), `launch` (id from `~/.pc_monitor/actions.json`; paths never leave the server).
 - `app`: installed app by discovered ID (dashboard never sends paths; server re-checks the ID). `text`: up to 1000 printable chars, typed via KEYEVENTF_UNICODE / xdotool type / AppleScript keystroke (text passed as argv).
 - Editor (`Deck` in `panel.js`): five tabs (App, Shortcut, Media & system, Text, Website); `SHORTCUTS` is the preset library (OS-aware: `os` groups, `cmd` groups map Ctrl→Cmd on macOS, optional per-item mac keys); `prettyKeys` shows Cmd/Option on Mac hosts. Mute/mic-mute buttons get `.is-on` from live audio state.
@@ -279,6 +283,8 @@ PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 
 - `cmd/server` is now `main.go` (subcommand dispatch; no command = `run`, so old flag-only usage still works), `run.go` (server; config + flag overrides; `--background` logs to `~/.pc_monitor/server.log`; single-instance via settings-port ping; `stop(restart)` closes listeners then `service.StartDetached()`), `cli.go` (start/stop/status/pin/config/autostart/update), `settings.go` + embedded `settings.html` (local page), `tray.go` (systray client of the settings API; `tray_stub.go` when cgo is off on macOS).
 - `pkg/config` (`~/.pc_monitor/config.json`, BOM-tolerant), `pkg/service` (detached start, OpenBrowser, autostart: HKCU Run / XDG autostart / LaunchAgent; `LoginArgs` = `tray` when built in), `pkg/update` (GitHub latest release, install-method detection, signed checksum verification, Windows rename-aside swap of both exes, AppImage replacement), `pkg/buildinfo` (`Version` via `-X`, `Newer`), `pkg/icon` (icon drawn in code; multi-size ICO), `cmd/signtool`, `cmd/pkgtool`.
 - Settings API (127.0.0.1:`settings_port`, default 9121): `/api/ping` (open), everything else needs `X-Settings-Key` from `~/.pc_monitor/settings_key`; non-localhost `Host` → 403. CLI/tray use it to talk to the running server.
+- Updates: `RunPeriodic` (every 6 h, started for non-dev builds; skips rounds while both `update_check` and `auto_update` are off). `auto_update` (config, default **off**) → `Checker.SetAuto`; `CheckAuto` installs when `CanApply` (self/AppImage only) and `run.go` `autoInstalled()` restarts. Settings API `POST /api/auto-update {enabled}` saves config and applies live (no restart), checking immediately when turned on; used by the settings page switch, tray checkbox and `pc_monitor update --auto on|off`. `Status.auto_update` reaches dashboards via `/api/health`. Dashboard: **Check for updates** (`/api/update {action:"check"}`) / **Update to vX** (`apply`, then polls health until the new version answers, ≤ 90 s).
+- Testing updates: `update_test.go` overrides `Checker.latestURL` (httptest) and `Checker.install` so nothing real is downloaded or replaced. For a live isolated server, build with `-ldflags "-X pc_monitor/pkg/buildinfo.Version=<latest>"` so checks hit GitHub but nothing is newer; never test auto-update with an older version (it would really install). Stub `/api/update` in the page to test the dashboard's apply flow.
 - Windows ships two exes from one source: `pc_monitor.exe` (console CLI) and `pc_monitor-app.exe` (`-H windowsgui -X main.guiBuild=1`; no args → tray). Start-at-login points at the app exe so no console flashes.
 - Start-at-login runs in the user's session on purpose (screen/audio/input need it); never convert it to a system service.
 

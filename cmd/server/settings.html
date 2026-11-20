@@ -111,6 +111,10 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .85em; backgro
       <section class="card">
         <h2>Updates</h2>
         <div id="update-text" class="muted">Checking…</div>
+        <div class="row">
+          <label for="auto_update">Install updates automatically<span class="muted">Checks every 6 hours; installs signed releases and restarts the server (a few seconds offline)</span></label>
+          <input type="checkbox" class="switch" id="auto_update">
+        </div>
         <div class="actions">
           <button id="check">Check now</button>
           <button id="apply" class="primary hidden">Update now</button>
@@ -141,7 +145,7 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .85em; backgro
         <div class="row"><label for="read_only">Read-only mode<span class="muted">Monitoring only: no remote control and no PIN</span></label><input type="checkbox" class="switch" id="read_only"></div>
         <div class="row"><label for="no_screen">Disable screen preview<span class="muted">Dashboards can't see what's on your screens</span></label><input type="checkbox" class="switch" id="no_screen"></div>
         <div class="row"><label for="tailcat">Peer-to-peer tunnel (Tailcat)<span class="muted">Reach this computer from outside your network</span></label><input type="checkbox" class="switch" id="tailcat"></div>
-        <div class="row"><label for="update_check">Check for updates daily</label><input type="checkbox" class="switch" id="update_check"></div>
+        <div class="row"><label for="update_check">Check for updates<span class="muted">Every 6 hours; shows when a new version is out</span></label><input type="checkbox" class="switch" id="update_check"></div>
         <details style="margin-top: 12px;">
           <summary class="muted" style="cursor: pointer;">Advanced</summary>
           <div class="grid2" style="margin-top: 12px;">
@@ -203,6 +207,10 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .85em; backgro
     if (u.error) t += ` (Last check failed: ${u.error})`;
     $('update-text').textContent = t;
     $('apply').classList.toggle('hidden', !(u.available && u.can_apply));
+    // Package-manager installs and dev builds can't replace themselves.
+    const canAuto = u.method === 'self' || u.method === 'appimage';
+    $('auto_update').checked = !!u.auto_update;
+    $('auto_update').disabled = !canAuto && !u.auto_update;
   }
 
   async function refresh(form) {
@@ -237,6 +245,14 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .85em; backgro
   $('autostart').onchange = async (e) => {
     try { const r = await call('POST', '/api/autostart', { enabled: e.target.checked }); e.target.checked = r.enabled; }
     catch (err) { e.target.checked = !e.target.checked; alert(err.message); }
+  };
+  $('auto_update').onchange = async (e) => {
+    try {
+      state.update = await call('POST', '/api/auto-update', { enabled: e.target.checked });
+      state.config.auto_update = e.target.checked;
+      fill(false);
+      if (e.target.checked) setTimeout(() => refresh(false), 4000); // it checks right away
+    } catch (err) { e.target.checked = !e.target.checked; alert(err.message); }
   };
   $('check').onclick = async () => {
     $('check').disabled = true; $('update-msg').textContent = '';

@@ -56,6 +56,8 @@ type Status struct {
 	URL       string    `json:"url,omitempty"`  // release page
 	CheckedAt time.Time `json:"checked_at,omitempty"`
 	Error     string    `json:"error,omitempty"`
+	// AutoUpdate: the server installs updates by itself (config auto_update).
+	AutoUpdate bool `json:"auto_update"`
 }
 
 type release struct {
@@ -75,15 +77,22 @@ type Checker struct {
 	status  Status
 	applyMu sync.Mutex
 	client  *http.Client
+
+	periodic  bool                            // RunPeriodic checks without auto-update
+	latestURL string                          // GitHub "latest release" API
+	install   func(ctx context.Context) error // Apply; overridable for tests
 }
 
 // NewChecker creates a checker for the running build.
 func NewChecker() *Checker {
 	method, note := InstallMethod()
-	return &Checker{
-		client: &http.Client{Timeout: 60 * time.Second},
-		status: Status{Current: buildinfo.Version, Method: method, Note: note},
+	c := &Checker{
+		client:    &http.Client{Timeout: 60 * time.Second},
+		status:    Status{Current: buildinfo.Version, Method: method, Note: note},
+		latestURL: "https://api.github.com/repos/" + buildinfo.Repo + "/releases/latest",
 	}
+	c.install = c.Apply
+	return c
 }
 
 // Status returns the last known status without network access.
@@ -112,13 +121,37 @@ func (c *Checker) Check(ctx context.Context) Status {
 	return c.status
 }
 
-// RunPeriodic checks now and then every interval until ctx ends.
-func (c *Checker) RunPeriodic(ctx context.Context, interval time.Duration) {
+// SetAuto turns automatic installation on or off (see RunPeriodic).
+func (c *Checker) SetAuto(on bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.status.AutoUpdate = on
+}
+
+// SetPeriodicChecks turns RunPeriodic's background checks on or off
+// (automatic updates check regardless).
+func (c *Checker) SetPeriodicChecks(on bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.periodic = on
+}
+
+func (c *Checker) shouldCheck() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.periodic || c.status.AutoUpdate
+}
+
+// RunPeriodic checks now and then every interval until ctx ends. When
+// automatic updates are on (SetAuto) and an update can be applied, it is
+// installed and installed() is called so the caller can restart.
+func (c *Checker) RunPeriodic(ctx context.Context, interval time.Duration, installed func()) {
 	go func() {
 		for {
-			cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-			c.Check(cctx)
-			cancel()
+			if c.shouldCheck() && c.CheckAuto(ctx) && installed != nil {
+				installed()
+				return
+			}
 			select {
 			case <-ctx.Done():
 				return
@@ -128,8 +161,28 @@ func (c *Checker) RunPeriodic(ctx context.Context, interval time.Duration) {
 	}()
 }
 
+// CheckAuto runs one check and, if automatic updates are
+// on and possible, installs the update. It reports whether one was installed.
+func (c *Checker) CheckAuto(ctx context.Context) bool {
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	st := c.Check(cctx)
+	cancel()
+	if !st.AutoUpdate || !st.CanApply || ctx.Err() != nil {
+		return false
+	}
+	actx, acancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer acancel()
+	if err := c.install(actx); err != nil {
+		c.mu.Lock()
+		c.status.Error = "automatic update failed: " + err.Error()
+		c.mu.Unlock()
+		return false
+	}
+	return true
+}
+
 func (c *Checker) fetchLatest(ctx context.Context) (*release, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/"+buildinfo.Repo+"/releases/latest", nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.latestURL, nil)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "pc-monitor-updater")
 	resp, err := c.client.Do(req)

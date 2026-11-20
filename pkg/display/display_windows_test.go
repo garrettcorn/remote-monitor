@@ -14,6 +14,7 @@ func TestWindowsStructSizes(t *testing.T) {
 		"DISPLAY_DEVICEW": {unsafe.Sizeof(displayDevice{}), 840},
 		"MONITORINFOEXW":  {unsafe.Sizeof(monitorInfoEx{}), 104},
 		"BITMAPINFO":      {unsafe.Sizeof(bitmapInfo{}), 44},
+		"INPUT (mouse)":   {unsafe.Sizeof(mouseInput{}), 40},
 	}
 	for name, c := range cases {
 		if c[0] != c[1] {

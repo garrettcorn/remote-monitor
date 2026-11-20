@@ -1309,7 +1309,7 @@ section.metric-card { margin-bottom: 18px !important; }
   .cp-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Stream Deck-style keys */
+/* Control Panel button keys */
 .deck-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
@@ -1473,6 +1473,7 @@ section.metric-card { margin-bottom: 18px !important; }
   background: var(--tint-orange);
   cursor: help;
 }
+.update-note.is-auto { color: var(--green); background: var(--tint-green); }
 
 /* ---------------------------------------------------------------------
    Button editor (category tiles, pick lists, chips)
@@ -1747,13 +1748,78 @@ textarea.form-input { min-height: 96px; }
 
 .screen-card { max-width: min(1400px, 96vw); }
 
+.screen-card .modal-header { flex-wrap: wrap; gap: 10px; }
+
+.screen-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.screen-stage {
+  position: relative;
+  border-radius: 10px;
+  background: #000;
+  overflow: hidden;
+  outline: none;
+}
+
 .screen-full {
   display: block;
   width: 100%;
   max-height: 75vh;
   object-fit: contain;
-  border-radius: 10px;
-  background: #000;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Remote control: the image takes all pointer/touch input. */
+.screen-stage.is-controlling { box-shadow: 0 0 0 2px var(--green); }
+.screen-stage.is-controlling .screen-full { cursor: crosshair; touch-action: none; }
+
+.screen-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.screen-control-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.screen-type { width: 180px; padding: 6px 10px; font-size: 0.82rem; }
+
+.screen-hint { margin-top: 6px; font-size: 0.74rem; }
+
+.screen-save-btn {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+.screen-save-btn:hover { background: rgba(0, 0, 0, 0.75); }
+
+@media (max-width: 600px) {
+  .screen-card .modal-title { flex: 1; min-width: 0; }
+  .screen-toolbar { order: 3; margin-left: 0; width: 100%; gap: 6px; }
+  .screen-control-bar { width: 100%; }
+  .screen-type { flex: 1 1 100%; min-width: 0; }
 }
 
 @media (max-width: 600px) {

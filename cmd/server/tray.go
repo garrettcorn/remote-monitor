@@ -12,6 +12,7 @@ import (
 	"pc_monitor/pkg/buildinfo"
 	"pc_monitor/pkg/icon"
 	"pc_monitor/pkg/service"
+	"pc_monitor/pkg/update"
 )
 
 const trayAvailable = true
@@ -48,6 +49,7 @@ func trayReady(port int) {
 	openDash := systray.AddMenuItem("Open dashboard", "Open the pairing link in your browser")
 	autostart := systray.AddMenuItemCheckbox("Start at login", "", service.AutostartEnabled())
 	updateItem := systray.AddMenuItem("Check for updates", "")
+	autoUpdate := systray.AddMenuItemCheckbox("Install updates automatically", "Check every 6 hours and install signed releases", false)
 	systray.AddSeparator()
 	startStop := systray.AddMenuItem("Stop server", "")
 	quit := systray.AddMenuItem("Quit tray (server keeps running)", "")
@@ -87,6 +89,17 @@ func trayReady(port int) {
 		} else {
 			autostart.Uncheck()
 		}
+		if latest.Update.AutoUpdate {
+			autoUpdate.Check()
+		} else {
+			autoUpdate.Uncheck()
+		}
+		// Package-manager installs and dev builds can't replace themselves.
+		if m := latest.Update.Method; (m == update.MethodSelf || m == update.MethodAppImage) || latest.Update.AutoUpdate {
+			autoUpdate.Enable()
+		} else {
+			autoUpdate.Disable()
+		}
 	}
 	refresh()
 	ticker := time.NewTicker(10 * time.Second)
@@ -107,6 +120,11 @@ func trayReady(port int) {
 					_ = service.AutostartDisable()
 				} else {
 					_ = service.AutostartEnable()
+				}
+				refresh()
+			case <-autoUpdate.ClickedCh:
+				if running {
+					_ = settingsCall(port, "POST", "/api/auto-update", map[string]bool{"enabled": !autoUpdate.Checked()}, nil)
 				}
 				refresh()
 			case <-updateItem.ClickedCh:

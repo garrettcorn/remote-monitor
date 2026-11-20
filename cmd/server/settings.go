@@ -91,6 +91,36 @@ func (s *server) settingsHandler() http.Handler {
 		defer cancel()
 		writeJSONResp(w, http.StatusOK, s.updates.Check(ctx))
 	}))
+	// /api/auto-update saves auto_update and applies it without a restart;
+	// turning it on checks (and installs) right away.
+	mux.HandleFunc("/api/auto-update", s.keyed(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&body); err != nil {
+			writeJSONResp(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+			return
+		}
+		c, err := config.Load()
+		if err == nil {
+			c.AutoUpdate = body.Enabled
+			err = c.Save()
+		}
+		if err != nil {
+			writeJSONResp(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		s.cfg.AutoUpdate = body.Enabled
+		s.updates.SetAuto(body.Enabled)
+		if body.Enabled && !buildinfo.IsDev() {
+			go func() {
+				if s.updates.CheckAuto(context.Background()) {
+					s.autoInstalled()
+				}
+			}()
+		}
+		writeJSONResp(w, http.StatusOK, s.updates.Status())
+	}))
 	mux.HandleFunc("/api/pairing/reset", s.keyed(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
 		if err := resetPairingFiles(); err != nil {
 			writeJSONResp(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

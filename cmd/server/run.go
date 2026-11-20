@@ -175,8 +175,11 @@ func (s *server) run(x *runExtras) error {
 	collector.Start(ctx)
 
 	s.updates = update.NewChecker()
-	if cfg.UpdateCheck && !buildinfo.IsDev() {
-		s.updates.RunPeriodic(ctx, 12*time.Hour)
+	s.updates.SetAuto(cfg.AutoUpdate)
+	s.updates.SetPeriodicChecks(cfg.UpdateCheck)
+	if !buildinfo.IsDev() {
+		// Every 6 h; skipped while both update_check and auto_update are off.
+		s.updates.RunPeriodic(ctx, 6*time.Hour, s.autoInstalled)
 	}
 
 	opts := api.Options{ReadOnly: cfg.ReadOnly, NoScreen: cfg.NoScreen, Version: buildinfo.Version, Updates: s.updates, Restart: s.restart}
@@ -373,4 +376,10 @@ func getLocalIPv4s() []string {
 		}
 	}
 	return ips
+}
+
+// autoInstalled restarts into an update that was installed automatically.
+func (s *server) autoInstalled() {
+	fmt.Printf("%s Installed v%s automatically; restarting\n", time.Now().Format(time.RFC3339), s.updates.Status().Latest)
+	s.restart()
 }

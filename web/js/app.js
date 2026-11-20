@@ -1,11 +1,11 @@
 // Main Application Orchestrator for PC Monitor GitHub Pages Client
 
 import { ServerStore } from './storage.js';
-import { MonitorClient } from './client.js?v=17';
+import { MonitorClient } from './client.js?v=19';
 import { SparklineChart } from './charts.js';
-import { UI } from './ui.js?v=17';
+import { UI } from './ui.js?v=19';
 import { QRScanner } from './qr-scanner.js';
-import { Layout, Deck, Screens } from './panel.js?v=17';
+import { Layout, Deck, Screens } from './panel.js?v=19';
 
 class App {
   constructor() {
@@ -108,6 +108,7 @@ class App {
     });
     document.getElementById('btn-sleep')?.addEventListener('click', () => this.powerAction('sleep'));
     document.getElementById('btn-update')?.addEventListener('click', () => this.applyUpdate());
+    document.getElementById('btn-update-check')?.addEventListener('click', () => this.checkForUpdate());
     document.getElementById('btn-restart')?.addEventListener('click', () => this.powerAction('restart'));
     document.getElementById('btn-shutdown')?.addEventListener('click', () => this.powerAction('shutdown'));
 
@@ -194,14 +195,49 @@ class App {
     if (!server.version) return;
     document.getElementById('host-version').textContent = server.version === 'dev' ? 'dev build' : 'v' + server.version;
     const u = server.update;
+    const checkBtn = document.getElementById('btn-update-check');
     const canApply = !!(u?.available && u.can_apply && server.controlEnabled);
     btn.classList.toggle('hidden', !canApply);
-    if (canApply) btn.textContent = `Update to v${u.latest}`;
-    const showNote = !!(u?.available && !canApply);
-    note.classList.toggle('hidden', !showNote);
-    if (showNote) {
-      note.textContent = `v${u.latest} available`;
-      note.title = u.note || (server.controlEnabled ? '' : 'Run `pc_monitor update` on the server');
+    if (canApply && !btn.disabled) btn.textContent = `Update to v${u.latest}`;
+    // Any paired 1.6+ release build can be asked to check again.
+    const canCheck = !!(u && u.method !== 'dev' && server.controlEnabled && !canApply);
+    checkBtn.classList.toggle('hidden', !canCheck);
+    let text = '', title = '';
+    if (u?.available && !canApply) {
+      text = `v${u.latest} available`;
+      title = u.note || (server.controlEnabled ? '' : 'Run `pc_monitor update` on the server');
+    } else if (u?.auto_update) {
+      text = 'Auto-update on';
+      title = 'The server installs new releases by itself (checks every 6 hours)';
+    }
+    if (u?.error && u.method !== 'dev') title = (title ? title + '\n' : '') + `Last check failed: ${u.error}`;
+    note.classList.toggle('hidden', !text);
+    note.classList.toggle('is-auto', !!text && !u?.available);
+    note.textContent = text;
+    note.title = title;
+  }
+
+  // Ask the server to look for a newer release now.
+  async checkForUpdate() {
+    const server = this.activeServer;
+    if (!server) return;
+    const btn = document.getElementById('btn-update-check');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    try {
+      const u = await MonitorClient.post(server, '/api/update', { action: 'check' });
+      server.update = u;
+      ServerStore.saveServer(server);
+      if (u.error) this.showToast(`Couldn't check for updates: ${u.error}`);
+      else if (u.available && u.can_apply) this.showToast(`Version ${u.latest} is available`);
+      else if (u.available) this.showToast(`Version ${u.latest} is available. ${u.note || ''}`.trim());
+      else this.showToast(`${server.name} is up to date (v${u.current})`);
+    } catch (e) {
+      this.handleControlError(server, e);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Check for updates';
+      if (this.activeServer === server) this.renderVersion(server);
     }
   }
 
@@ -216,7 +252,16 @@ class App {
     try {
       await MonitorClient.post(server, '/api/update', { action: 'apply' });
       this.showToast(`Updating ${server.name} to v${u.latest}…`);
-      setTimeout(() => { if (this.activeServer === server) this.switchServer(server.id); }, 8000);
+      // Wait (up to ~90 s) for the server to come back on the new version.
+      let updated = false;
+      for (let i = 0; i < 45 && !updated; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const health = await MonitorClient.fetchHealth(server);
+        updated = health?.version === u.latest;
+      }
+      btn.disabled = false;
+      this.showToast(updated ? `${server.name} updated to v${u.latest}` : `${server.name} hasn't come back yet; it will reconnect when it does`);
+      if (this.activeServer === server) this.switchServer(server.id);
     } catch (e) {
       btn.disabled = false;
       btn.textContent = `Update to v${u.latest}`;
@@ -400,6 +445,7 @@ class App {
     if (health) {
       server.controlEnabled = !!health.control_enabled;
       server.screenCapture = !!health.screen_capture;
+      server.remoteInput = !!health.remote_input;
       server.version = health.version || '';
       server.update = health.update || null;
       ServerStore.saveServer(server);
@@ -407,7 +453,7 @@ class App {
     this.renderVersion(server);
     this.setControlUI(!!server.controlEnabled);
     this.deck.setServer(server);
-    this.screens.setServer(server, !!server.screenCapture && !!server.controlEnabled);
+    this.screens.setServer(server, !!server.screenCapture && !!server.controlEnabled, !!server.remoteInput);
     if (health?.pin_required && !server.session) {
       this.requirePIN(server);
       return;

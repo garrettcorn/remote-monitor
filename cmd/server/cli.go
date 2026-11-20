@@ -114,6 +114,7 @@ func statusCommand() error {
 	} else if st.Update.Latest != "" {
 		fmt.Println("  Update:         up to date")
 	}
+	fmt.Printf("  Auto-update:    %s\n", onOff(st.Update.AutoUpdate))
 	fmt.Printf("  Log:            %s\n", st.Log)
 	return nil
 }
@@ -226,8 +227,12 @@ func autostartCommand(args []string) error {
 func updateCommand(args []string) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	checkOnly := fs.Bool("check", false, "Only check for a new version")
+	auto := fs.String("auto", "", "on|off: install updates automatically (every 6 hours)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *auto != "" {
+		return setAutoUpdate(*auto)
 	}
 	c := update.NewChecker()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -261,6 +266,40 @@ func updateCommand(args []string) error {
 			return err
 		}
 		return startCommand()
+	}
+	return nil
+}
+
+// setAutoUpdate saves auto_update; a running server applies it at once.
+func setAutoUpdate(v string) error {
+	var on bool
+	switch strings.ToLower(v) {
+	case "on", "true", "yes", "1":
+		on = true
+	case "off", "false", "no", "0":
+	default:
+		return fmt.Errorf("use --auto on or --auto off")
+	}
+	cfg := loadConfigOrDefaults()
+	if running, _ := pingSettings(cfg.SettingsPort); running {
+		if err := settingsCall(cfg.SettingsPort, "POST", "/api/auto-update", map[string]bool{"enabled": on}, nil); err != nil {
+			return err
+		}
+	} else {
+		c, err := config.Load()
+		if err != nil {
+			return err
+		}
+		c.AutoUpdate = on
+		if err := c.Save(); err != nil {
+			return err
+		}
+	}
+	fmt.Println("Automatic updates:", onOff(on))
+	if on {
+		if method, note := update.InstallMethod(); method != update.MethodSelf && method != update.MethodAppImage {
+			fmt.Println("Note: this copy can't update itself.", note)
+		}
 	}
 	return nil
 }

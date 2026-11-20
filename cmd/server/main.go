@@ -6,7 +6,7 @@
 //	pc_monitor pin               show the current pairing PIN and link
 //	pc_monitor config list | get <key> | set <key> <value> | path
 //	pc_monitor autostart on | off | status
-//	pc_monitor update [--check]
+//	pc_monitor update [--check | --auto on|off]
 //	pc_monitor version
 package main
 
@@ -88,6 +88,7 @@ Usage:
   pc_monitor config list            Show saved settings (also: get <key>, set <key> <value>, path)
   pc_monitor autostart on|off       Start automatically when you log in
   pc_monitor update [--check]       Install the latest release (or just check)
+  pc_monitor update --auto on|off   Install updates automatically (every 6 hours)
   pc_monitor version                Print the version
 
 Run flags (override saved settings; add --save to keep them):

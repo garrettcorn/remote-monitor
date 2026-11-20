@@ -28,7 +28,8 @@ type Config struct {
 	ReadOnly     bool   `json:"read_only"`     // disable remote control
 	NoScreen     bool   `json:"no_screen"`     // disable screen previews
 	SettingsPort int    `json:"settings_port"` // local settings page (127.0.0.1 only)
-	UpdateCheck  bool   `json:"update_check"`  // check GitHub for new releases daily
+	UpdateCheck  bool   `json:"update_check"`  // check GitHub for new releases
+	AutoUpdate   bool   `json:"auto_update"`   // install new releases automatically
 	ExportHTML   string `json:"export_html"`   // pairing card file ("" to skip)
 }
 
@@ -115,7 +116,7 @@ func (c *Config) fields() map[string]any {
 	return map[string]any{
 		"name": &c.Name, "port": &c.Port, "tailcat_port": &c.TailcatPort, "no_tailcat": &c.NoTailcat,
 		"web_url": &c.WebURL, "read_only": &c.ReadOnly, "no_screen": &c.NoScreen,
-		"settings_port": &c.SettingsPort, "update_check": &c.UpdateCheck, "export_html": &c.ExportHTML,
+		"settings_port": &c.SettingsPort, "update_check": &c.UpdateCheck, "auto_update": &c.AutoUpdate, "export_html": &c.ExportHTML,
 	}
 }
 

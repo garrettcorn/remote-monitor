@@ -8,7 +8,7 @@
   <meta name="color-scheme" content="dark light">
   <title>PC Monitor — System Telemetry & Multi-Server Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
 
@@ -82,6 +82,7 @@
             <span class="meta-val version-val">
               <span id="host-version">--</span>
               <button id="btn-update" class="btn btn-primary btn-sm update-btn hidden">Update</button>
+              <button id="btn-update-check" class="btn btn-outline btn-sm update-btn hidden" title="Ask the server to look for a newer release">Check for updates</button>
               <span id="update-note" class="update-note hidden"></span>
             </span>
           </div>
@@ -95,7 +96,7 @@
         </div>
       </section>
 
-      <!-- Control Panel: Stream Deck buttons, audio, power -->
+      <!-- Control Panel: buttons, audio, power -->
       <section id="control-panel" class="metric-card control-panel" data-section="control">
         <div class="card-header">
           <div>
@@ -424,10 +425,29 @@
     <div class="modal-card screen-card">
       <div class="modal-header">
         <div id="screen-modal-title" class="modal-title">Display</div>
+        <div class="screen-toolbar">
+          <label id="screen-control-label" class="switch-inline" title="Send your mouse and keyboard to this display">
+            <span>Remote control</span>
+            <input id="screen-control" type="checkbox" class="switch">
+          </label>
+          <button id="btn-screen-refresh" class="btn btn-outline btn-sm" title="Capture again">Refresh</button>
+          <button id="btn-screen-save" class="btn btn-outline btn-sm" title="Save a full-resolution capture as a JPEG">Save</button>
+        </div>
         <button class="modal-close-btn" aria-label="Close">&times;</button>
       </div>
-      <img id="screen-modal-img" class="screen-full" alt="Screen preview">
-      <div id="screen-modal-time" class="sub-text" style="margin-top: 8px;"></div>
+      <div id="screen-stage" class="screen-stage">
+        <img id="screen-modal-img" class="screen-full" alt="Screen preview" draggable="false">
+      </div>
+      <div class="screen-footer">
+        <div id="screen-modal-time" class="sub-text"></div>
+        <div id="screen-control-bar" class="screen-control-bar hidden">
+          <input id="screen-type" class="form-input screen-type" type="text" placeholder="Type to send…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Type text on the remote display">
+          <button class="btn btn-outline btn-sm" data-send-keys="win" title="Start menu / Cmd">Win</button>
+          <button class="btn btn-outline btn-sm" data-send-keys="alt+tab">Alt+Tab</button>
+          <button class="btn btn-outline btn-sm" data-send-keys="esc">Esc</button>
+        </div>
+      </div>
+      <p id="screen-control-hint" class="sub-text screen-hint hidden">Clicks, scrolling and keys go to the host while Remote control is on. Some browser shortcuts (like Ctrl+W) can't be captured; use the buttons above.</p>
     </div>
   </div>
 
@@ -447,7 +467,7 @@
     </div>
   </div>
 
-  <!-- ================= STREAM DECK BUTTON EDITOR ================= -->
+  <!-- ================= CONTROL PANEL BUTTON EDITOR ================= -->
   <div id="deck-modal" class="modal-overlay hidden">
     <div class="modal-card deck-editor">
       <div class="modal-header">
@@ -540,6 +560,6 @@
   </div>
 
   <!-- Main JavaScript App -->
-  <script type="module" src="js/app.js?v=17"></script>
+  <script type="module" src="js/app.js?v=19"></script>
 </body>
 </html>

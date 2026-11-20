@@ -28,7 +28,7 @@ type Options struct {
 	// Sessions stores PIN-issued sessions; nil means in-memory only. Pass a
 	// persistent store (control.LoadSessions) to survive restarts.
 	Sessions *control.Sessions
-	// ActionsFile is the allowlist of apps Stream Deck buttons may launch
+	// ActionsFile is the allowlist of apps Control Panel buttons may launch
 	// (re-read on each use). Empty disables launch actions.
 	ActionsFile string
 	// NoScreen disables screen capture previews even when control is enabled.
@@ -52,10 +52,11 @@ type Server struct {
 	clients    map[*websocket.Conn]struct{}
 
 	// Overridable for tests.
-	doPower  func(power.Action) error
-	doDeck   func(deck.Action, string) error
-	capture  func(index, maxWidth int) ([]byte, error)
-	listApps func() ([]deck.App, error)
+	doPower   func(power.Action) error
+	doDeck    func(deck.Action, string) error
+	capture   func(index, maxWidth int) ([]byte, error)
+	doPointer func(index int, e display.PointerEvent) error
+	listApps  func() ([]deck.App, error)
 }
 
 // NewServer creates a new API server.
@@ -74,6 +75,7 @@ func NewServer(serverName, token string, collector *telemetry.Collector, opts Op
 		doPower:    power.Do,
 		doDeck:     deck.Press,
 		capture:    display.Capture,
+		doPointer:  display.Pointer,
 		listApps:   deck.ListApps,
 	}
 }
@@ -84,6 +86,12 @@ func (s *Server) controlEnabled() bool { return !s.opts.ReadOnly && s.opts.PIN !
 // PIN-paired (control) session and can be switched off with -no-screen.
 func (s *Server) screenCaptureEnabled() bool {
 	return s.controlEnabled() && !s.opts.NoScreen && display.CaptureSupported()
+}
+
+// remoteInputEnabled: driving the mouse and keyboard from the screen viewer
+// needs everything screen capture needs, plus platform input support.
+func (s *Server) remoteInputEnabled() bool {
+	return s.screenCaptureEnabled() && display.InputSupported()
 }
 
 // Handler returns the HTTP multiplexer configured with routes and middleware.
@@ -103,6 +111,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/deck/apps", s.requireControlMethod(http.MethodGet, s.handleDeckApps))
 	mux.HandleFunc("/api/deck/press", s.requireControl(s.handleDeckPress))
 	mux.HandleFunc("/api/display/screenshot", s.requireControlMethod(http.MethodGet, s.handleScreenshot))
+	mux.HandleFunc("/api/display/input", s.requireControl(s.handleDisplayInput))
 	mux.HandleFunc("/api/update", s.requireControl(s.handleUpdate))
 
 	return s.corsMiddleware(mux)
@@ -222,6 +231,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"control_enabled": s.controlEnabled(),
 		"pin_required":    s.controlEnabled(),
 		"screen_capture":  s.screenCaptureEnabled(),
+		"remote_input":    s.remoteInputEnabled(),
 		"version":         s.opts.Version,
 		"update":          s.updateStatus(),
 	})
@@ -446,6 +456,43 @@ func (s *Server) handleScreenshot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(img)
+}
+
+// displayInput is one remote-control event from the screen viewer: a
+// pointer event on a display, a key press ("ctrl+c", "enter") or text.
+type displayInput struct {
+	display.PointerEvent
+	Index int    `json:"index"`
+	Keys  string `json:"keys,omitempty"` // type "key"
+	Text  string `json:"text,omitempty"` // type "text"
+}
+
+// handleDisplayInput drives the host's mouse and keyboard.
+func (s *Server) handleDisplayInput(w http.ResponseWriter, r *http.Request) {
+	if !s.remoteInputEnabled() {
+		errorJSON(w, http.StatusForbidden, "input_disabled", "remote input is disabled on this server")
+		return
+	}
+	var in displayInput
+	if !decodeBody(w, r, &in) {
+		return
+	}
+	var err error
+	switch in.Type {
+	case "key":
+		err = s.doDeck(deck.Action{Type: "hotkey", Keys: in.Keys}, "")
+	case "text":
+		err = s.doDeck(deck.Action{Type: "text", Text: in.Text}, "")
+	default:
+		if err = in.PointerEvent.Validate(); err == nil {
+			err = s.doPointer(in.Index, in.PointerEvent)
+		}
+	}
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, "input_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {

@@ -5,13 +5,21 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
+
+	"pc_monitor/pkg/buildinfo"
 )
 
 func TestVerifySignatureRejectsForgeries(t *testing.T) {
@@ -98,5 +106,61 @@ func TestReplacements(t *testing.T) {
 	r := replacements(app) // running as the tray app
 	if len(r) != 2 || r[0].target != console || r[1].target != app {
 		t.Fatalf("both: %+v", r)
+	}
+}
+
+func TestAutoUpdate(t *testing.T) {
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"tag_name":"v99.0.0","html_url":"https://example.invalid/r"}`))
+	}))
+	defer gh.Close()
+	old := buildinfo.Version
+	buildinfo.Version = "1.0.0"
+	defer func() { buildinfo.Version = old }()
+
+	newChecker := func(method string) (*Checker, *int) {
+		c := NewChecker()
+		c.latestURL = gh.URL
+		c.status.Method = method
+		installs := 0
+		c.install = func(context.Context) error { installs++; return nil } // never touch real files
+		return c, &installs
+	}
+	ctx := context.Background()
+
+	// Off: only checks.
+	c, n := newChecker(MethodSelf)
+	if c.CheckAuto(ctx) || *n != 0 || !c.Status().Available {
+		t.Fatalf("auto off: installed=%d status=%+v", *n, c.Status())
+	}
+	// On: installs.
+	c.SetAuto(true)
+	if !c.CheckAuto(ctx) || *n != 1 || !c.Status().AutoUpdate {
+		t.Fatalf("auto on: installed=%d", *n)
+	}
+	// On, but a package manager owns the files: never installs.
+	c, n = newChecker(MethodManaged)
+	c.SetAuto(true)
+	if c.CheckAuto(ctx) || *n != 0 {
+		t.Fatalf("managed: installed=%d", *n)
+	}
+	// Install failure is reported, not retried in a loop.
+	c, _ = newChecker(MethodSelf)
+	c.SetAuto(true)
+	c.install = func(context.Context) error { return errors.New("disk full") }
+	if c.CheckAuto(ctx) || !strings.Contains(c.Status().Error, "disk full") {
+		t.Fatalf("failure: %+v", c.Status())
+	}
+	// RunPeriodic calls installed() after an automatic install.
+	c, _ = newChecker(MethodSelf)
+	c.SetAuto(true)
+	done := make(chan struct{})
+	rctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	c.RunPeriodic(rctx, time.Hour, func() { close(done) })
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("installed callback not called")
 	}
 }
