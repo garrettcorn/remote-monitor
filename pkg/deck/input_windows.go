@@ -59,6 +59,9 @@ func keyVK(k string) (uint16, error) {
 	if vk, ok := namedVK[k]; ok {
 		return vk, nil
 	}
+	if vk, ok := modVK[k]; ok { // a lone modifier tap, e.g. "win"
+		return vk, nil
+	}
 	if len(k) == 1 {
 		c := k[0]
 		if c >= 'a' && c <= 'z' {

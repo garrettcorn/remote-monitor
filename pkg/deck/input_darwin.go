@@ -16,6 +16,8 @@ var macKeyCode = map[string]int{
 	"space": 49, "enter": 36, "tab": 48, "esc": 53, "backspace": 51, "delete": 117,
 	"home": 115, "end": 119, "pageup": 116, "pagedown": 121, "left": 123,
 	"right": 124, "down": 125, "up": 126,
+	// Lone modifier taps.
+	"win": 55, "shift": 56, "alt": 58, "ctrl": 59,
 	"f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97, "f7": 98, "f8": 100,
 	"f9": 101, "f10": 109, "f11": 103, "f12": 111,
 }

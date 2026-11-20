@@ -127,7 +127,15 @@ func ParseHotkey(s string) (Hotkey, error) {
 		}
 	}
 	if hk.Key == "" {
-		return hk, errors.New("shortcut needs a non-modifier key")
+		// A single modifier on its own is a tap of that key (e.g. "win"
+		// opens the Start menu); combinations need a non-modifier key.
+		if len(mods) != 1 {
+			return hk, errors.New("shortcut needs a non-modifier key")
+		}
+		for m := range mods {
+			hk.Key = m
+		}
+		return hk, nil
 	}
 	for _, m := range Modifiers {
 		if mods[m] {

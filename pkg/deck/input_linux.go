@@ -42,6 +42,8 @@ func pressHotkey(hk Hotkey) error {
 	key := hk.Key
 	if k, ok := namedKeysym[key]; ok {
 		key = k
+	} else if k, ok := modKeysym[key]; ok { // a lone modifier tap, e.g. "win"
+		key = k
 	} else if key[0] == 'f' && len(key) > 1 {
 		key = "F" + key[1:]
 	}

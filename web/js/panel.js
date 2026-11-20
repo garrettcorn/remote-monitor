@@ -1,8 +1,8 @@
 // Dashboard customization (show/hide sections) and the Control Panel
 // button grid.
 
-import { UI } from './ui.js?v=20';
-import { MonitorClient } from './client.js?v=20';
+import { UI } from './ui.js?v=21';
+import { MonitorClient } from './client.js?v=21';
 
 const esc = UI.esc;
 
@@ -1164,7 +1164,14 @@ export class Screens {
     try {
       while (this.inputQueue.length && this.controlling && this.server === server) {
         const ev = this.inputQueue.shift();
-        await MonitorClient.post(server, '/api/display/input', ev);
+        try {
+          await MonitorClient.post(server, '/api/display/input', ev);
+        } catch (e) {
+          // The host refused this one event (e.g. a key it can't press):
+          // say so and keep controlling. Anything else ends control below.
+          if (e.code !== 'input_error') throw e;
+          this.app.showToast(`Couldn't send that: ${e.message}`);
+        }
         if (ev.type !== 'move') this.scheduleLive(INPUT_FRAME_MS);
       }
     } catch (e) {

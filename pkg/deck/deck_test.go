@@ -19,6 +19,9 @@ func TestParseHotkey(t *testing.T) {
 		"ctrl+alt+delete": {Mods: []string{"ctrl", "alt"}, Key: "delete"},
 		"win+printscreen": {Mods: []string{"win"}, Key: "printscreen"},
 		"control+pgdn":    {Mods: []string{"ctrl"}, Key: "pagedown"},
+		"win":             {Key: "win"}, // lone modifier tap (Start menu)
+		"cmd":             {Key: "win"},
+		"ctrl":            {Key: "ctrl"},
 	}
 	for in, want := range ok {
 		got, err := ParseHotkey(in)
@@ -26,7 +29,7 @@ func TestParseHotkey(t *testing.T) {
 			t.Errorf("ParseHotkey(%q) = %+v, %v; want %+v", in, got, err, want)
 		}
 	}
-	for _, bad := range []string{"", "ctrl", "ctrl+shift", "a+b", "f0", "f25", "f01", "ctrl+;", "hyper+x"} {
+	for _, bad := range []string{"", "ctrl+shift", "win+alt", "a+b", "f0", "f25", "f01", "ctrl+;", "hyper+x"} {
 		if _, err := ParseHotkey(bad); err == nil {
 			t.Errorf("ParseHotkey(%q) should fail", bad)
 		}
@@ -37,7 +40,7 @@ func TestPressValidation(t *testing.T) {
 	// These must be rejected before anything touches the host.
 	bad := []Action{
 		{Type: "media", Key: "self_destruct"},
-		{Type: "hotkey", Keys: "ctrl"},
+		{Type: "hotkey", Keys: "ctrl+shift"},
 		{Type: "url", URL: "file:///C:/Windows/System32/calc.exe"},
 		{Type: "url", URL: "javascript:alert(1)"},
 		{Type: "url", URL: "https://"},
