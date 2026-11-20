@@ -15,6 +15,7 @@ import (
 	"pc_monitor/pkg/display"
 	"pc_monitor/pkg/power"
 	"pc_monitor/pkg/telemetry"
+	"pc_monitor/pkg/update"
 )
 
 // Options configures access control.
@@ -32,6 +33,12 @@ type Options struct {
 	ActionsFile string
 	// NoScreen disables screen capture previews even when control is enabled.
 	NoScreen bool
+	// Version is reported in /api/health.
+	Version string
+	// Updates checks for and installs new releases (nil disables /api/update).
+	Updates Updater
+	// Restart relaunches the server (after an update).
+	Restart func()
 }
 
 // Server handles HTTP and WebSocket telemetry requests.
@@ -96,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/deck/apps", s.requireControlMethod(http.MethodGet, s.handleDeckApps))
 	mux.HandleFunc("/api/deck/press", s.requireControl(s.handleDeckPress))
 	mux.HandleFunc("/api/display/screenshot", s.requireControlMethod(http.MethodGet, s.handleScreenshot))
+	mux.HandleFunc("/api/update", s.requireControl(s.handleUpdate))
 
 	return s.corsMiddleware(mux)
 }
@@ -214,6 +222,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"control_enabled": s.controlEnabled(),
 		"pin_required":    s.controlEnabled(),
 		"screen_capture":  s.screenCaptureEnabled(),
+		"version":         s.opts.Version,
+		"update":          s.updateStatus(),
 	})
 }
 
@@ -365,6 +375,53 @@ func (s *Server) handleDeckPress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// Updater is implemented by update.Checker.
+type Updater interface {
+	Status() update.Status
+	Check(ctx context.Context) update.Status
+	Apply(ctx context.Context) error
+}
+
+func (s *Server) updateStatus() any {
+	if s.opts.Updates == nil {
+		return nil
+	}
+	return s.opts.Updates.Status()
+}
+
+// handleUpdate checks for or installs a new release (PIN-paired dashboards).
+func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	if s.opts.Updates == nil {
+		errorJSON(w, http.StatusNotImplemented, "update_unavailable", "updates are not available on this server")
+		return
+	}
+	var body struct {
+		Action string `json:"action"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	switch body.Action {
+	case "check":
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		writeJSON(w, http.StatusOK, s.opts.Updates.Check(ctx))
+	case "apply":
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := s.opts.Updates.Apply(ctx); err != nil {
+			errorJSON(w, http.StatusConflict, "update_failed", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "restarting"})
+		if s.opts.Restart != nil {
+			s.opts.Restart()
+		}
+	default:
+		errorJSON(w, http.StatusBadRequest, "bad_request", "action must be \"check\" or \"apply\"")
+	}
 }
 
 // handleScreenshot returns a JPEG of one display (?index=N, ?width=max px).

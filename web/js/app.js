@@ -1,11 +1,11 @@
 // Main Application Orchestrator for PC Monitor GitHub Pages Client
 
 import { ServerStore } from './storage.js';
-import { MonitorClient } from './client.js?v=16';
+import { MonitorClient } from './client.js?v=17';
 import { SparklineChart } from './charts.js';
-import { UI } from './ui.js?v=16';
+import { UI } from './ui.js?v=17';
 import { QRScanner } from './qr-scanner.js';
-import { Layout, Deck, Screens } from './panel.js?v=16';
+import { Layout, Deck, Screens } from './panel.js?v=17';
 
 class App {
   constructor() {
@@ -107,6 +107,7 @@ class App {
       }
     });
     document.getElementById('btn-sleep')?.addEventListener('click', () => this.powerAction('sleep'));
+    document.getElementById('btn-update')?.addEventListener('click', () => this.applyUpdate());
     document.getElementById('btn-restart')?.addEventListener('click', () => this.powerAction('restart'));
     document.getElementById('btn-shutdown')?.addEventListener('click', () => this.powerAction('shutdown'));
 
@@ -179,6 +180,46 @@ class App {
       this.audioHoldUntil = 0;
       this.renderAudio(state, true);
     } catch (e) {
+      this.handleControlError(server, e);
+    }
+  }
+
+  // Server version + update status from /api/health (absent on servers older than 1.6).
+  renderVersion(server) {
+    const item = document.getElementById('host-version-item');
+    const btn = document.getElementById('btn-update');
+    const note = document.getElementById('update-note');
+    if (!item) return;
+    item.classList.toggle('hidden', !server.version);
+    if (!server.version) return;
+    document.getElementById('host-version').textContent = server.version === 'dev' ? 'dev build' : 'v' + server.version;
+    const u = server.update;
+    const canApply = !!(u?.available && u.can_apply && server.controlEnabled);
+    btn.classList.toggle('hidden', !canApply);
+    if (canApply) btn.textContent = `Update to v${u.latest}`;
+    const showNote = !!(u?.available && !canApply);
+    note.classList.toggle('hidden', !showNote);
+    if (showNote) {
+      note.textContent = `v${u.latest} available`;
+      note.title = u.note || (server.controlEnabled ? '' : 'Run `pc_monitor update` on the server');
+    }
+  }
+
+  async applyUpdate() {
+    const server = this.activeServer;
+    const u = server?.update;
+    if (!server || !u?.available) return;
+    if (!confirm(`Update "${server.name}" from v${server.version} to v${u.latest}?\n\nThe server downloads the release, verifies its signature, installs it and restarts. The dashboard reconnects automatically.`)) return;
+    const btn = document.getElementById('btn-update');
+    btn.disabled = true;
+    btn.textContent = 'Updating…';
+    try {
+      await MonitorClient.post(server, '/api/update', { action: 'apply' });
+      this.showToast(`Updating ${server.name} to v${u.latest}…`);
+      setTimeout(() => { if (this.activeServer === server) this.switchServer(server.id); }, 8000);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = `Update to v${u.latest}`;
       this.handleControlError(server, e);
     }
   }
@@ -359,8 +400,11 @@ class App {
     if (health) {
       server.controlEnabled = !!health.control_enabled;
       server.screenCapture = !!health.screen_capture;
+      server.version = health.version || '';
+      server.update = health.update || null;
       ServerStore.saveServer(server);
     }
+    this.renderVersion(server);
     this.setControlUI(!!server.controlEnabled);
     this.deck.setServer(server);
     this.screens.setServer(server, !!server.screenCapture && !!server.controlEnabled);

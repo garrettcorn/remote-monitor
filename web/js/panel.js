@@ -1,8 +1,8 @@
 // Dashboard customization (show/hide sections) and the Stream Deck-style
 // button grid in the Control Panel.
 
-import { UI } from './ui.js?v=16';
-import { MonitorClient } from './client.js?v=16';
+import { UI } from './ui.js?v=17';
+import { MonitorClient } from './client.js?v=17';
 
 const esc = UI.esc;
 

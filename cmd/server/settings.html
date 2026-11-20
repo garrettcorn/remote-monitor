@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>PC Monitor Settings</title>
+<style>
+:root {
+  --bg: #05070d; --fill: rgba(255,255,255,.06); --fill2: rgba(255,255,255,.1); --stroke: rgba(255,255,255,.12);
+  --rim: rgba(255,255,255,.28); --text: rgba(255,255,255,.95); --muted: rgba(235,235,245,.62);
+  --blue: #0a84ff; --green: #30d158; --red: #ff453a; --orange: #ff9f0a;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #eef1f7; --fill: rgba(255,255,255,.6); --fill2: rgba(255,255,255,.85); --stroke: rgba(0,0,0,.08);
+    --rim: rgba(255,255,255,.95); --text: #1d1d1f; --muted: rgba(60,60,67,.66); --blue: #007aff; --green: #28a745; --red: #ff3b30; --orange: #f08c00; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Inter, Roboto, sans-serif;
+  color: var(--text); min-height: 100vh; padding: 24px 16px 48px;
+  background: radial-gradient(ellipse 60vmax 50vmax at 5% 0%, rgba(10,132,255,.32), transparent 70%),
+              radial-gradient(ellipse 50vmax 45vmax at 100% 40%, rgba(191,90,242,.25), transparent 70%), var(--bg);
+  background-attachment: fixed;
+}
+main { max-width: 860px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 1.5rem; letter-spacing: -.02em; }
+h2 { font-size: 1rem; margin-bottom: 12px; }
+.card { background: linear-gradient(140deg, var(--fill2), transparent 45%), var(--fill); border: 1px solid var(--stroke);
+  box-shadow: inset 0 1px 0 var(--rim), 0 10px 30px rgba(0,0,0,.25); border-radius: 20px; padding: 20px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+.muted { color: var(--muted); font-size: .85rem; }
+.pill { padding: 5px 12px; border-radius: 999px; font-size: .8rem; font-weight: 600; background: var(--fill); border: 1px solid var(--stroke); }
+.pill.ok { color: var(--green); } .pill.bad { color: var(--red); }
+.pair { display: grid; grid-template-columns: 180px 1fr; gap: 18px; align-items: center; }
+@media (max-width: 520px) { .pair { grid-template-columns: 1fr; } }
+.qr { background: #fff; border-radius: 14px; padding: 8px; aspect-ratio: 1; display: grid; place-items: center; }
+.qr svg { width: 100%; height: auto; display: block; }
+.pin { font: 700 2.4rem/1 ui-monospace, "SF Mono", Consolas, monospace; letter-spacing: .25em; margin: 6px 0; }
+.link { display: flex; gap: 8px; margin-top: 10px; }
+.link input { flex: 1; min-width: 0; }
+input[type=text], input[type=number], input[type=url] {
+  font: inherit; color: var(--text); background: var(--fill); border: 1px solid var(--stroke); border-radius: 12px; padding: 9px 12px; width: 100%;
+}
+input:focus { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 40%, transparent); }
+button { font: inherit; font-weight: 600; font-size: .88rem; border-radius: 999px; padding: 9px 16px; cursor: pointer;
+  color: var(--text); background: var(--fill2); border: 1px solid var(--stroke); }
+button.primary { color: #fff; background: linear-gradient(180deg, rgba(255,255,255,.28), transparent 55%), var(--blue); border-color: transparent; }
+button.danger { color: var(--red); }
+button:disabled { opacity: .5; cursor: default; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--stroke); }
+.row:last-child { border-bottom: 0; }
+.row label { font-weight: 550; }
+.row .muted { display: block; font-weight: 400; }
+.field { display: grid; gap: 6px; margin-bottom: 12px; }
+.field label { font-size: .82rem; font-weight: 600; color: var(--muted); }
+.switch { appearance: none; -webkit-appearance: none; width: 46px; height: 28px; border-radius: 999px; position: relative; flex-shrink: 0;
+  background: var(--fill2); box-shadow: inset 0 0 0 1px var(--stroke); cursor: pointer; transition: background .25s; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 5px rgba(0,0,0,.25); transition: transform .3s cubic-bezier(.32,.72,0,1); }
+.switch:checked { background: var(--green); } .switch:checked::after { transform: translateX(18px); }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.msg { margin-top: 10px; font-size: .88rem; font-weight: 550; }
+.msg.err { color: var(--red); } .msg.ok { color: var(--green); }
+.hidden { display: none !important; }
+#locked { text-align: center; padding: 48px 20px; }
+code { font-family: ui-monospace, Consolas, monospace; font-size: .85em; background: var(--fill); padding: 1px 6px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>PC Monitor</h1>
+      <div class="muted" id="subtitle">Settings for this computer</div>
+    </div>
+    <span id="status" class="pill">Connecting…</span>
+  </header>
+
+  <section id="locked" class="card hidden">
+    <h2>Open this page from PC Monitor</h2>
+    <p class="muted">For security, this page needs a key that only this computer has. Run <code>pc_monitor settings</code>, or use the PC Monitor tray icon.</p>
+  </section>
+
+  <div id="app" class="hidden" style="display: grid; gap: 16px;">
+    <section class="card">
+      <h2>Pair a dashboard</h2>
+      <div class="pair">
+        <div class="qr" id="qr"></div>
+        <div>
+          <div id="pin-block">
+            <div class="muted">Control PIN (one-time, changes after each use)</div>
+            <div class="pin" id="pin">----</div>
+          </div>
+          <div class="muted" id="paired"></div>
+          <div class="link">
+            <input type="text" id="link" readonly aria-label="Pairing link">
+            <button id="copy">Copy</button>
+          </div>
+          <div class="actions">
+            <button id="open-dash">Open dashboard</button>
+            <button id="revoke" class="danger">Revoke all dashboards</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>Updates</h2>
+        <div id="update-text" class="muted">Checking…</div>
+        <div class="actions">
+          <button id="check">Check now</button>
+          <button id="apply" class="primary hidden">Update now</button>
+        </div>
+        <div id="update-msg" class="msg"></div>
+      </section>
+      <section class="card">
+        <h2>Startup</h2>
+        <div class="row">
+          <label for="autostart">Start when I log in<span class="muted" id="autostart-where"></span></label>
+          <input type="checkbox" class="switch" id="autostart">
+        </div>
+        <div class="actions">
+          <button id="restart">Restart server</button>
+          <button id="stop" class="danger">Stop server</button>
+        </div>
+        <div class="muted" style="margin-top: 10px;">Log: <code id="log"></code></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Settings</h2>
+      <form id="form" autocomplete="off">
+        <div class="grid2">
+          <div class="field"><label for="name">Computer name</label><input type="text" id="name" required maxlength="60"></div>
+          <div class="field"><label for="port">Network port (dashboards connect here)</label><input type="number" id="port" min="0" max="65535"></div>
+        </div>
+        <div class="row"><label for="read_only">Read-only mode<span class="muted">Monitoring only: no remote control and no PIN</span></label><input type="checkbox" class="switch" id="read_only"></div>
+        <div class="row"><label for="no_screen">Disable screen preview<span class="muted">Dashboards can't see what's on your screens</span></label><input type="checkbox" class="switch" id="no_screen"></div>
+        <div class="row"><label for="tailcat">Peer-to-peer tunnel (Tailcat)<span class="muted">Reach this computer from outside your network</span></label><input type="checkbox" class="switch" id="tailcat"></div>
+        <div class="row"><label for="update_check">Check for updates daily</label><input type="checkbox" class="switch" id="update_check"></div>
+        <details style="margin-top: 12px;">
+          <summary class="muted" style="cursor: pointer;">Advanced</summary>
+          <div class="grid2" style="margin-top: 12px;">
+            <div class="field"><label for="tailcat_port">Tailcat port</label><input type="number" id="tailcat_port" min="1" max="65535"></div>
+            <div class="field"><label for="settings_port">Settings page port</label><input type="number" id="settings_port" min="1" max="65535"></div>
+          </div>
+          <div class="field"><label for="web_url">Dashboard address used in pairing links</label><input type="url" id="web_url"></div>
+        </details>
+        <div class="actions"><button type="submit" class="primary">Save &amp; restart</button></div>
+        <div id="form-msg" class="msg"></div>
+      </form>
+    </section>
+  </div>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // A key link opened in a tab already showing this page only changes the fragment.
+  window.addEventListener('hashchange', () => { if (/key=/.test(location.hash)) location.reload(); });
+  // The key arrives in the URL fragment (never sent to the server), then lives in this tab only.
+  const m = location.hash.match(/key=([A-Za-z0-9]+)/);
+  if (m) { try { sessionStorage.setItem('pcm_key', m[1]); } catch (e) {} history.replaceState(null, '', location.pathname); }
+  let key = m ? m[1] : null;
+  try { key = key || sessionStorage.getItem('pcm_key'); } catch (e) {}
+  let state = null, saved = null;
+
+  async function call(method, path, body) {
+    const r = await fetch(path, { method, headers: { 'X-Settings-Key': key || '', 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    return data;
+  }
+
+  function setStatus(text, cls) { const s = $('status'); s.textContent = text; s.className = 'pill ' + (cls || ''); }
+
+  function fill(form) {
+    const c = state.config;
+    if (form) {
+      $('name').value = c.name; $('port').value = c.port; $('read_only').checked = c.read_only;
+      $('no_screen').checked = c.no_screen; $('tailcat').checked = !c.no_tailcat; $('update_check').checked = c.update_check;
+      $('tailcat_port').value = c.tailcat_port; $('settings_port').value = c.settings_port; $('web_url').value = c.web_url;
+    }
+    const p = state.pairing;
+    $('subtitle').textContent = `${c.name} · version ${state.version}`;
+    $('qr').innerHTML = p.qr_svg || '';
+    $('link').value = p.url;
+    $('pin-block').classList.toggle('hidden', !p.control);
+    $('pin').textContent = p.pin || '----';
+    $('paired').textContent = p.control ? `${p.paired} dashboard(s) paired` : 'Read-only: dashboards connect without a PIN';
+    $('autostart').checked = state.autostart.enabled;
+    $('autostart-where').textContent = state.autostart.where;
+    $('log').textContent = state.log;
+    const u = state.update;
+    let t = `Installed ${u.current}.`;
+    if (u.method === 'dev') t = 'Development build: updates are disabled.';
+    else if (u.available) t += ` Version ${u.latest} is available.`;
+    else if (u.latest) t += ' You’re up to date.';
+    if (u.note && u.method !== 'dev') t += ' ' + u.note;
+    if (u.error) t += ` (Last check failed: ${u.error})`;
+    $('update-text').textContent = t;
+    $('apply').classList.toggle('hidden', !(u.available && u.can_apply));
+  }
+
+  async function refresh(form) {
+    try {
+      state = await call('GET', '/api/state');
+      setStatus('Running', 'ok');
+      $('app').classList.remove('hidden'); $('locked').classList.add('hidden');
+      fill(form);
+    } catch (e) {
+      if (/settings/.test(e.message)) { $('locked').classList.remove('hidden'); $('app').classList.add('hidden'); setStatus('Locked', 'bad'); }
+      else setStatus('Not responding', 'bad');
+    }
+  }
+
+  // After a restart, wait for the server to come back.
+  async function waitBack(msgEl, text) {
+    msgEl.className = 'msg'; msgEl.textContent = text;
+    setStatus('Restarting…');
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      try { const r = await fetch('/api/ping', { cache: 'no-store' }); if (r.ok) { await refresh(true); msgEl.className = 'msg ok'; msgEl.textContent = 'Done.'; return; } } catch (e) {}
+    }
+    msgEl.className = 'msg err'; msgEl.textContent = 'The server didn’t come back. Check the log.';
+  }
+
+  $('copy').onclick = async () => { try { await navigator.clipboard.writeText($('link').value); $('copy').textContent = 'Copied'; setTimeout(() => $('copy').textContent = 'Copy', 1500); } catch (e) { $('link').select(); } };
+  $('open-dash').onclick = () => window.open($('link').value, '_blank', 'noopener');
+  $('revoke').onclick = async () => {
+    if (!confirm('Revoke every paired dashboard? They will need the new pairing link/QR and a PIN.')) return;
+    await call('POST', '/api/pairing/reset'); waitBack($('form-msg'), 'Revoking and restarting…');
+  };
+  $('autostart').onchange = async (e) => {
+    try { const r = await call('POST', '/api/autostart', { enabled: e.target.checked }); e.target.checked = r.enabled; }
+    catch (err) { e.target.checked = !e.target.checked; alert(err.message); }
+  };
+  $('check').onclick = async () => {
+    $('check').disabled = true; $('update-msg').textContent = '';
+    try { state.update = await call('POST', '/api/update', { action: 'check' }); fill(false); }
+    catch (e) { $('update-msg').className = 'msg err'; $('update-msg').textContent = e.message; }
+    $('check').disabled = false;
+  };
+  $('apply').onclick = async () => {
+    $('apply').disabled = true; $('update-msg').className = 'msg'; $('update-msg').textContent = 'Downloading and verifying…';
+    try { await call('POST', '/api/update', { action: 'apply' }); waitBack($('update-msg'), 'Installed. Restarting…'); }
+    catch (e) { $('update-msg').className = 'msg err'; $('update-msg').textContent = e.message; }
+    $('apply').disabled = false;
+  };
+  $('restart').onclick = async () => { await call('POST', '/api/restart'); waitBack($('form-msg'), 'Restarting…'); };
+  $('stop').onclick = async () => {
+    if (!confirm('Stop PC Monitor? Dashboards will disconnect until you start it again.')) return;
+    await call('POST', '/api/stop'); setStatus('Stopped', 'bad');
+  };
+  $('form').onsubmit = async (e) => {
+    e.preventDefault();
+    const c = { ...state.config,
+      name: $('name').value.trim(), port: +$('port').value, read_only: $('read_only').checked, no_screen: $('no_screen').checked,
+      no_tailcat: !$('tailcat').checked, update_check: $('update_check').checked, tailcat_port: +$('tailcat_port').value,
+      settings_port: +$('settings_port').value, web_url: $('web_url').value.trim() };
+    try {
+      await call('POST', '/api/config', c);
+      if (c.settings_port !== state.config.settings_port) {
+        $('form-msg').className = 'msg ok';
+        $('form-msg').textContent = 'Saved. The settings page moved: reopen it with pc_monitor settings.';
+        return;
+      }
+      waitBack($('form-msg'), 'Saved. Restarting…');
+    } catch (err) { $('form-msg').className = 'msg err'; $('form-msg').textContent = err.message; }
+  };
+
+  if (!key) { $('locked').classList.remove('hidden'); setStatus('Locked', 'bad'); return; }
+  refresh(true);
+  setInterval(() => { if (!document.hidden && state) refresh(false); }, 3000); // PIN changes after each use
+})();
+</script>
+</body>
+</html>

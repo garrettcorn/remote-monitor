@@ -8,7 +8,7 @@
   <meta name="color-scheme" content="dark light">
   <title>PC Monitor — System Telemetry & Multi-Server Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
 
@@ -76,6 +76,14 @@
           <div class="meta-item">
             <span class="meta-label">Signed in</span>
             <span id="host-users" class="meta-val">--</span>
+          </div>
+          <div id="host-version-item" class="meta-item hidden">
+            <span class="meta-label">Server version</span>
+            <span class="meta-val version-val">
+              <span id="host-version">--</span>
+              <button id="btn-update" class="btn btn-primary btn-sm update-btn hidden">Update</button>
+              <span id="update-note" class="update-note hidden"></span>
+            </span>
           </div>
           <div id="host-battery-item" class="meta-item hidden">
             <span class="meta-label">Battery</span>
@@ -532,6 +540,6 @@
   </div>
 
   <!-- Main JavaScript App -->
-  <script type="module" src="js/app.js?v=16"></script>
+  <script type="module" src="js/app.js?v=17"></script>
 </body>
 </html>

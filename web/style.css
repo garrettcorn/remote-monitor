@@ -1461,6 +1461,19 @@ section.metric-card { margin-bottom: 18px !important; }
 
 .swatch-custom:focus-within { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 45%, transparent); }
 
+/* Server version + update in the summary bar */
+.version-val { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.update-btn { padding: 3px 10px; font-size: 0.72rem; }
+.update-note {
+  padding: 2px 9px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--orange);
+  background: var(--tint-orange);
+  cursor: help;
+}
+
 /* ---------------------------------------------------------------------
    Button editor (category tiles, pick lists, chips)
    --------------------------------------------------------------------- */
