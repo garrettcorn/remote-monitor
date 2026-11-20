@@ -2095,6 +2095,44 @@ textarea.form-input { min-height: 96px; }
   gap: 18px;
 }
 
+/* First-run "Get started" guide (onboarding.js) */
+.get-started { grid-column: 1 / -1; max-width: 760px; }
+.gs-title { margin: 0 0 6px; font-size: 1.35rem; }
+.gs-lead { margin: 0 0 18px; color: var(--text-muted); line-height: 1.5; }
+.gs-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 18px; }
+.gs-steps > li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 14px; align-items: start; }
+.gs-num {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--blue);
+}
+.gs-body h3 { margin: 4px 0 8px; font-size: 1rem; }
+.gs-body p { margin: 0 0 10px; line-height: 1.55; }
+.gs-body code, .gs-hint code {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--inner-fill);
+}
+.gs-download { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 16px; margin-bottom: 8px; }
+.gs-primary { text-decoration: none; }
+.gs-meta { margin-left: 6px; font-size: 0.75rem; font-weight: 500; opacity: 0.85; }
+.gs-others { font-size: 0.85rem; padding-top: 8px; }
+.gs-others summary { cursor: pointer; color: var(--blue); font-weight: 600; }
+.gs-others ul { margin: 8px 0; padding-left: 18px; line-height: 1.8; }
+.gs-others a, .gs-hint a, .gs-foot a { color: var(--blue); }
+.gs-foot { margin: 18px 0 0; }
+
+.pair-help { margin: 0 0 16px; line-height: 1.5; }
+.pair-help a { color: var(--blue); }
+.pair-help code { font-family: var(--font-mono); font-size: 0.8em; padding: 1px 5px; border-radius: 5px; background: var(--inner-fill); }
+
 .fleet-card {
   display: flex;
   flex-direction: column;

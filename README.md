@@ -31,12 +31,8 @@ A lightweight, cross-platform system monitor and real-time dashboard powered by 
 - **Network Activity**: Interface list with MAC addresses, IPv4, IPv6, active link state, instantaneous download/upload speeds (KB/s, MB/s), and total RX/TX byte counters.
 - **Operating System & Host**: Hostname, OS version/build, kernel, uptime, and running apps grouped by program with CPU, GPU, memory and I/O, search, details and End task.
 
-### 3. Instant 3-Way Pairing
-When the server starts, it automatically outputs:
-1. **Pairing Code**: The Tailcat address string (`tc...`) and session token.
-2. **Clickable Pairing Link**: Formatted directly for your GitHub Pages deployment.
-3. **Terminal QR Code**: An ANSI/Unicode QR code rendered directly inside your terminal screen — just point your smartphone camera or webcam at the terminal to pair in 1 second!
-4. **Offline Pairing Card**: Automatically saves `pairing_card.html` with an SVG QR code for sharing.
+### 3. Easy Pairing
+Each server has a **pairing link** and **QR code**, shown on its local settings page (tray icon → **Open settings…**), by `pc_monitor pin`, and in the terminal when run in the foreground. Scan the QR code with a phone camera or open the link in any browser, then enter the one-time **4-digit PIN** shown on that computer. See [Step 3: Pair the dashboard](#step-3-pair-the-dashboard).
 
 ### 4. GitHub Pages Multi-Server Client
 - **100% Static Web App**: Modern HTML5, responsive CSS3, and ES Modules. Zero build steps, bundlers, or Node.js dependencies needed.
@@ -86,8 +82,8 @@ When the server starts, it automatically outputs:
 | **Shutdown / restart** | ✅ `shutdown /s` / `/r` (5 s delay) | 🟡 `systemctl poweroff` / `reboot` | 🟡 AppleScript System Events |
 | **Tray / menu-bar icon** | ✅ `fyne.io/systray` in the windowless `pc_monitor-app.exe` | ✅ `fyne.io/systray` via D-Bus StatusNotifierItem (GNOME needs the AppIndicator extension) | ✅ `fyne.io/systray` (cgo build) |
 | **Start at login** | ✅ per-user `HKCU\…\Run` entry (no admin) | ✅ XDG autostart entry (`~/.config/autostart`) | ✅ LaunchAgent (`~/Library/LaunchAgents`), or `brew services` |
-| **Self-update** | ✅ signed download; renames the running `.exe` aside | ✅ replaces the binary or the AppImage file; also `.zsync` for AppImageUpdate | ✅ signed download, or `brew upgrade` |
-| **Packages** | Inno Setup installer, `.zip`, Scoop | AppImage, `.deb`, `.rpm`, `.tar.gz` | Homebrew, `.tar.gz` |
+| **Self-update** | ✅ signed download; renames the running `.exe` aside | ✅ replaces the binary or the AppImage file; also `.zsync` for AppImageUpdate | ✅ signed download |
+| **Packages** | Inno Setup installer, `.zip` (Scoop planned) | AppImage, `.deb`, `.rpm`, `.tar.gz` | `.tar.gz` (Homebrew planned) |
 | **Sleep** | ✅ `SetSuspendState` (powrprof, with `SeShutdownPrivilege`; sleeps rather than hibernates) | 🟡 `systemctl suspend` | 🟡 `pmset sleepnow` |
 
 The server is a single Go binary with no runtime dependencies on Windows. The Linux/macOS tools above are used only if they're installed; missing ones just leave that panel empty.
@@ -96,23 +92,60 @@ The server is a single Go binary with no runtime dependencies on Windows. The Li
 
 ## 🚀 Quick Start Guide
 
-### Step 1: Install the Server
+PC Monitor has two parts: the **server**, which you install on each computer you want to monitor, and the **dashboard**, which runs in any browser at [garrettcorn.github.io/remote-monitor](https://garrettcorn.github.io/remote-monitor/) (nothing to install). The dashboard's **Get started** page also offers a one-click download for your system.
 
-Download from the [latest release](https://github.com/garrettcorn/remote-monitor/releases/latest), or use a package manager:
+### Step 1: Install the server
 
-| Platform | Recommended | Alternatives |
+Download from the **[latest release](https://github.com/garrettcorn/remote-monitor/releases/latest)**. Pick the file for your computer (`<version>` is the release number, e.g. `1.8.1`):
+
+| Computer | Download | How to install |
 |---|---|---|
-| **Windows** | `pc_monitor_<version>_windows_amd64_setup.exe`: per-user installer, no admin needed. Adds Start-menu shortcuts and an optional "start when I log in" | `scoop bucket add pc-monitor https://github.com/garrettcorn/scoop-bucket` then `scoop install pc-monitor`, or the `.zip` |
-| **Linux** | `pc_monitor-<version>-x86_64.AppImage` (or `-aarch64`): `chmod +x` it and double-click. It updates itself, or use [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate) | `.deb` (`sudo apt install ./pc-monitor_<version>_amd64.deb`), `.rpm`, or the `.tar.gz` |
-| **macOS** | `brew install garrettcorn/tap/pc-monitor` | the `.tar.gz` (Apple Silicon `darwin_arm64`, Intel `darwin_amd64`) |
-| **Android (Termux)** | the `linux_arm64` `.tar.gz` | |
+| **Windows** (most PCs) | [`pc_monitor_<version>_windows_amd64_setup.exe`](https://github.com/garrettcorn/remote-monitor/releases/latest) | Run it. It installs for your user only, no admin needed, and can start PC Monitor when you log in. If SmartScreen says "Windows protected your PC", click **More info → Run anyway** (the app isn't code-signed). |
+| **Windows on ARM** (Surface Pro X, Snapdragon laptops) | [`pc_monitor_<version>_windows_arm64_setup.exe`](https://github.com/garrettcorn/remote-monitor/releases/latest) | Same as above. |
+| **Mac with Apple Silicon** (M1 and later) | [`pc_monitor_<version>_darwin_arm64.tar.gz`](https://github.com/garrettcorn/remote-monitor/releases/latest) | Double-click to unpack, then see [macOS](#macos) below. |
+| **Mac with Intel** | [`pc_monitor_<version>_darwin_amd64.tar.gz`](https://github.com/garrettcorn/remote-monitor/releases/latest) | Same as above. |
+| **Linux** (most PCs) | [`pc_monitor-<version>-x86_64.AppImage`](https://github.com/garrettcorn/remote-monitor/releases/latest) | `chmod +x pc_monitor-*.AppImage`, then double-click it or run it. It updates itself. Some distributions need FUSE 2 (`sudo apt install libfuse2`), or run it with `--appimage-extract-and-run`. |
+| **Linux on ARM** (Raspberry Pi 4/5, ARM laptops) | [`pc_monitor-<version>-aarch64.AppImage`](https://github.com/garrettcorn/remote-monitor/releases/latest) | Same as above. |
+| **Debian / Ubuntu** (package) | [`pc-monitor_<version>_amd64.deb`](https://github.com/garrettcorn/remote-monitor/releases/latest) (or `_arm64`) | `sudo apt install ./pc-monitor_<version>_amd64.deb` |
+| **Fedora / RHEL / openSUSE** (package) | [`pc-monitor-<version>-1.x86_64.rpm`](https://github.com/garrettcorn/remote-monitor/releases/latest) (or `.aarch64`) | `sudo dnf install ./pc-monitor-<version>-1.x86_64.rpm` |
+| **Android (Termux)** | [`pc_monitor_<version>_linux_arm64.tar.gz`](https://github.com/garrettcorn/remote-monitor/releases/latest) | `tar xzf` it in Termux and run `./pc_monitor` |
 
-AppImages need FUSE 2 on some distributions (`sudo apt install libfuse2`); otherwise run them with `--appimage-extract-and-run`. Downloaded binaries aren't code-signed, so Windows SmartScreen may say "unrecognized app" (click **More info → Run anyway**), and macOS may block a downloaded binary until you allow it in **System Settings → Privacy & Security**. Homebrew installs avoid the macOS prompt.
+Not sure which you have? On Windows, **Settings → System → About** shows "x64" or "ARM64". On a Mac, ** → About This Mac** shows "Apple M…" or "Intel". On Linux, `uname -m` prints `x86_64` or `aarch64`.
 
-### Step 1b: Start it
+Every release also has plain `.zip` / `.tar.gz` archives with just the program, plus `checksums.txt` (signed) to verify downloads. Homebrew and Scoop packages are planned but not published yet.
 
-- **Easiest:** open **PC Monitor** from the Start menu or app launcher, or double-click the AppImage. A tray / menu-bar icon appears and the server starts in the background. Choose **Open settings…** to see the pairing QR code and PIN.
-- **From a terminal:** `pc_monitor` runs in the foreground and prints the QR code and PIN. Use `pc_monitor start` to run it in the background instead.
+#### macOS
+
+Browsers mark downloaded programs as "quarantined", and PC Monitor isn't signed by Apple, so the first launch is blocked. The simplest way is to download and run it from **Terminal**, which skips the quarantine (use `darwin_amd64` on an Intel Mac):
+
+```bash
+cd ~ && mkdir -p pc_monitor && cd pc_monitor
+curl -fsSL "$(curl -fsSL https://api.github.com/repos/garrettcorn/remote-monitor/releases/latest | grep -o 'https://[^"]*darwin_arm64.tar.gz')" | tar xz
+./pc_monitor
+```
+
+If you unpacked it in Finder instead, run `xattr -d com.apple.quarantine pc_monitor` in that folder first, or allow it under **System Settings → Privacy & Security → Open Anyway**. To start it at login with a menu-bar icon, run `./pc_monitor autostart on` and then `./pc_monitor tray`.
+
+### Step 2: Start the server
+
+- **Windows and Linux (AppImage / package):** open **PC Monitor** from the Start menu or app launcher. A tray icon appears and the server runs in the background. Choose **Open settings…** from the tray icon to see the pairing QR code and PIN.
+- **From a terminal (any system):** run `pc_monitor`. It prints the pairing link, a QR code and the PIN, and keeps running until you close the window. `pc_monitor start` runs it in the background instead, and `pc_monitor settings` opens the settings page.
+
+The settings page opens in your browser but only works on that computer. It shows the QR code, the pairing link, the current PIN and every option.
+
+### Step 3: Pair the dashboard
+
+Pairing tells a browser how to reach the server. Use the QR code or pairing link from the settings page (or terminal), whichever is easiest:
+
+1. **On a phone or tablet:** point the camera at the QR code and tap the link. The dashboard opens and adds the computer.
+2. **On another computer:** copy the **pairing link** from the settings page and open it in the browser, or open the [dashboard](https://garrettcorn.github.io/remote-monitor/), click **Pair Server** and paste the link. **Scan QR Code with Camera** there uses a webcam instead.
+3. **Enter the PIN.** The dashboard asks for the 4-digit PIN shown on the settings page, in the tray's settings, or by `pc_monitor pin`. It connects as soon as you type the fourth digit.
+
+That's it. The dashboard remembers the computer (in your browser), so it reconnects on its own, even after the server restarts. Pair more computers the same way and switch between them, or see them all side by side in **Fleet Overview**.
+
+**About the PIN:** each PIN works once. After it's used, or after 5 wrong tries, the server shows a new one for the next browser. The PIN only appears on the computer itself, so someone who gets hold of the pairing link still can't connect. To disconnect every paired browser, use **Revoke all dashboards** on the settings page (or start the server once with `-reset-pairing`); this also changes the pairing link and QR code. Start the server with `-read-only` (or turn on read-only mode in settings) for monitoring only: remote control is off and no PIN is needed.
+
+**Connection tips:** the dashboard connects to the server directly over your network on port `9120`. Both devices need to be on the same network, or connected through a VPN such as Tailscale. If it can't connect, allow PC Monitor through the computer's firewall (Windows asks the first time it runs). Some browsers block a secure site (the dashboard) from talking to a plain-HTTP address on your network. If yours does, allow "insecure content" for the dashboard's site in the browser's site settings.
 
 ### Managing the server
 
@@ -133,54 +166,9 @@ The server checks GitHub for new releases every 6 hours (turn this off in settin
 
 **Automatic updates** (off by default): turn on **Install updates automatically** in the settings page or tray menu, or run `pc_monitor update --auto on`. The server then installs new signed releases by itself and restarts (dashboards are offline for a few seconds and reconnect). Turning it on checks immediately. Dashboards show **Auto-update on** next to the version. Copies installed by a package manager (Homebrew, Scoop, `.deb`/`.rpm`) can't replace their own files, so use the package manager there.
 
-Every release's `checksums.txt` is signed with the project's ed25519 key. The updater only installs a download whose signature verifies against the key built into PC Monitor **and** whose SHA-256 matches. Homebrew and Scoop installs are updated with `brew upgrade` / `scoop update`. Installs from a `.deb` or `.rpm` show where to download the new package.
+Every release's `checksums.txt` is signed with the project's ed25519 key. The updater only installs a download whose signature verifies against the key built into PC Monitor **and** whose SHA-256 matches. Installs from a `.deb` or `.rpm` show where to download the new package.
 
 ---
-
-### Step 2: Pair with the Client
-
-Once the server starts, you will see a banner in your terminal:
-
-```
-========================================================================
-  PC MONITOR SERVER - Cross-Platform System Telemetry & Pairing
-========================================================================
-
-  Server Name:    Workstation (windows/amd64)
-  Tailcat Addr:   tc1...
-  Pairing Token:  4a9f81bc20e98...
-  Direct LAN URL: http://192.168.1.120:9120
-  Pairing Link:   https://<user>.github.io/pc_monitor/#name=Workstation&tc=tc1...&token=...
-  Pairing Card:   pairing_card.html (saved)
-
-  SCAN WITH PHONE CAMERA TO PAIR INSTANTLY:
-  [ ANSI QR CODE ]
-```
-
-You can pair using any of these methods:
-- **Scan the Terminal QR Code**: Open your phone camera or tablet camera and tap the link to open the dashboard and pair automatically.
-- **Click the Pairing Link**: Open the generated URL in any web browser.
-- **In-App Scanner**: On your GitHub Pages web app, click **➕ Pair Server** ➔ **📷 Scan Terminal QR Code** to use your webcam or phone camera.
-- **Manual Input**: Paste the Tailcat address (`tc...`) or direct IP address into the pairing dialog.
-
-### Step 3: Enter the Control PIN
-
-Remote control (volume, mute, audio device switching, shutdown and restart) is **on by default**, so the dashboard asks for a one-time **4-digit PIN** the first time it connects. The PIN is printed only in the server's console:
-
-```
-  Remote control: ENABLED (audio, shutdown/restart). Use -read-only to disable.
-  Control PIN:    4821   (enter in the dashboard to connect; one-time use)
-```
-
-Each PIN works once. After it's used (or after 5 wrong attempts) the server prints a new PIN for the next dashboard:
-
-```
-  [pairing] PIN used. New control PIN: 0937
-```
-
-Pairings are remembered: the pairing token and paired sessions are saved in `~/.pc_monitor/` (`pairing_token`, `sessions.json`, readable only by your user; sessions are stored as hashes), so dashboards reconnect automatically after the server restarts. To revoke every paired dashboard, start the server once with `-reset-pairing`; it creates a new pairing link and QR code.
-
-Start the server with `-read-only` for monitoring only: control is disabled and no PIN is needed.
 
 ### Control Panel Buttons
 

@@ -1,5 +1,7 @@
 // UI Renderer for dashboard widgets, gauges, drives, and process tables.
 
+import { GetStarted } from './onboarding.js?v=25';
+
 const ICONS = {
   drive: '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5" width="15" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="10" r="1.2" fill="currentColor"/><path d="M5.5 10h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
   thermo: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 4a2 2 0 1 1 4 0v7.3a3.5 3.5 0 1 1-4 0z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="10" cy="14" r="1.6" fill="currentColor"/><path d="M10 13V7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
@@ -415,11 +417,8 @@ export const UI = {
     if (!container) return;
 
     if (!servers || servers.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <h3>No servers paired yet</h3>
-          <p>Click "Pair New Server" to connect to your first machine.</p>
-        </div>`;
+      // First run: show how to install the server and pair it.
+      if (!container.querySelector('.get-started')) GetStarted.render(container);
       return;
     }
 
