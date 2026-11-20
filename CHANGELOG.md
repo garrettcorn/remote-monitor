@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.2] - 2026-11-20
+
+### Changed
+- Revoke a dashboard's session on the server when it unpairs, so that browser needs a new PIN to pair again ([`1c1edc0`](https://github.com/garrettcorn/remote-monitor/commit/1c1edc0))
+
+### Added
+- Add a Get started guide to the dashboard with a download for your system and pairing steps ([`7b56f46`](https://github.com/garrettcorn/remote-monitor/commit/7b56f46))
+- Add install and pairing instructions for Windows, macOS and Linux to the README ([`7b56f46`](https://github.com/garrettcorn/remote-monitor/commit/7b56f46))
+
+### Fixed
+- Fix an unpaired server being paired again moments later ([`1c1edc0`](https://github.com/garrettcorn/remote-monitor/commit/1c1edc0))
+
 ## [1.8.1] - 2026-11-20
 
 ### Changed
@@ -201,6 +213,7 @@ All notable changes to this project will be documented in this file.
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
 
+[1.8.2]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.8.2
 [1.8.1]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.8.1
 [1.8.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.8.0
 [1.7.3]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.3

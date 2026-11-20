@@ -1,6 +1,6 @@
 # Agent Handoff: Remote Monitor
 
-> Last updated: 2026-11-20 (release **v1.8.1**)  
+> Last updated: 2026-11-20 (release **v1.8.2**)  
 > Repo: https://github.com/garrettcorn/remote-monitor  
 > Pages: https://garrettcorn.github.io/remote-monitor/  
 > Local workspace: `c:\Users\jon\workspace\pc_monitor\`
@@ -125,6 +125,7 @@ No new third-party Go dependencies were added for audio/SMART/devices: Windows u
 | `v1.7.3` | Windows update swap is all-or-nothing and survives a locked `.old` (old tray still running); tray relaunches itself after updates |
 | `v1.8.0` | Processes reworked: grouped by app, 5 s CPU smoothing, GPU/I/O columns, sort, search, Show all (`/api/processes`), details, End task (`pkg/procctl`), Windows app icons (`pkg/appicon`) |
 | `v1.8.1` | Windows 11 detected from the build number (registry ProductName still says Windows 10); dashboard shows the full OS name |
+| `v1.8.2` | Unpair sticks (disconnect first, `updateServer` for background saves, `POST /api/unpair` revokes the session); dashboard Get started guide and README install/pairing guide |
 
 All released tags have 7 release assets.
 
