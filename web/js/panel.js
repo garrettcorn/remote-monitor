@@ -1,8 +1,8 @@
 // Dashboard customization (show/hide sections) and the Control Panel
 // button grid.
 
-import { UI } from './ui.js?v=19';
-import { MonitorClient } from './client.js?v=19';
+import { UI } from './ui.js?v=20';
+import { MonitorClient } from './client.js?v=20';
 
 const esc = UI.esc;
 
@@ -698,6 +698,8 @@ export class Screens {
     this.wheelAccum = 0;
     this.lastMoveAt = 0;
     this.liveTimer = null;
+    this.fullscreen = false;
+    this.keysLocked = false;
     this.autoRefresh = load(AUTOREFRESH_KEY, false) === true;
     this.timer = setInterval(() => this.tick(), REFRESH_MS);
     this.bind();
@@ -730,6 +732,14 @@ export class Screens {
     document.getElementById('btn-screen-save')?.addEventListener('click', () => this.saveCapture(this.viewing));
     document.getElementById('btn-screen-refresh')?.addEventListener('click', () => this.refreshViewing());
     document.getElementById('screen-control')?.addEventListener('change', (e) => this.setControlling(e.target.checked));
+    document.getElementById('btn-screen-fullscreen')?.addEventListener('click', () => this.setFullscreen(!this.fullscreen));
+    // Leaving browser full screen (Esc, F11, swipe) ends our full-screen mode.
+    const fsChange = () => {
+      if (this.fullscreen && !(document.fullscreenElement || document.webkitFullscreenElement)) this.setFullscreen(false);
+      else { this.updateKeyLock(); this.updateHint(); }
+    };
+    document.addEventListener('fullscreenchange', fsChange);
+    document.addEventListener('webkitfullscreenchange', fsChange);
     document.querySelectorAll('#screen-control-bar [data-send-keys]').forEach(b =>
       b.addEventListener('click', () => this.queueInput({ type: 'key', keys: b.dataset.sendKeys })));
 
@@ -897,8 +907,14 @@ export class Screens {
     this.busy = true;
     const server = this.server;
     const d = this.displays.find(x => x.index === index);
-    // Live frames are sized for the viewer; the card previews stay at 1280.
-    const width = Math.min(d?.width || 1600, 1600);
+    // Live frames are sized for the viewer (sharper in full screen, up to
+    // 2560 px); the card previews stay at 1280.
+    let width = Math.min(d?.width || 1600, 1600);
+    if (this.fullscreen) {
+      const stage = document.getElementById('screen-stage');
+      const want = Math.round((stage?.clientWidth || 1600) * (window.devicePixelRatio || 1));
+      width = Math.min(d?.width || 2560, Math.max(1600, want), 2560);
+    }
     try {
       const blob = await this.fetchCapture(server, index, width);
       if (this.server !== server || this.viewing !== index) return false;
@@ -947,7 +963,55 @@ export class Screens {
     document.getElementById('screen-modal').classList.remove('hidden');
   }
 
+  // Full screen: the viewer fills the display (Fullscreen API, or a fixed
+  // overlay where the API isn't available, e.g. iPhone Safari). While
+  // controlling in real full screen, Chromium's Keyboard Lock sends Esc,
+  // Alt+Tab, Ctrl+W and friends to the host (hold Esc to leave).
+  setFullscreen(on) {
+    on = !!on && this.viewing >= 0;
+    if (on === this.fullscreen) return;
+    this.fullscreen = on;
+    const card = document.querySelector('#screen-modal .screen-card');
+    card?.classList.toggle('is-fullscreen', on);
+    const btn = document.getElementById('btn-screen-fullscreen');
+    if (btn) btn.textContent = on ? 'Exit full screen' : 'Full screen';
+    // Never wait on these: some embedders leave the promise pending. The
+    // CSS layout works either way; key lock follows fullscreenchange.
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (on && card && !fsEl) {
+      const req = card.requestFullscreen || card.webkitRequestFullscreen;
+      try { Promise.resolve(req?.call(card, { navigationUI: 'hide' })).catch(() => {}); } catch (e) { /* fixed overlay fallback */ }
+    } else if (!on && fsEl) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      try { Promise.resolve(exit?.call(document)).catch(() => {}); } catch (e) { /* already gone */ }
+    }
+    this.updateKeyLock();
+    this.updateHint();
+    // A sharper frame for the bigger view.
+    if (on) {
+      if (this.controlling) this.scheduleLive(0);
+      else this.refreshViewing();
+    }
+  }
+
+  updateKeyLock() {
+    const want = this.controlling && this.fullscreen && !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (want === this.keysLocked || !navigator.keyboard?.lock) return;
+    this.keysLocked = want;
+    if (want) navigator.keyboard.lock().catch(() => { this.keysLocked = false; this.updateHint(); });
+    else navigator.keyboard.unlock();
+  }
+
+  updateHint() {
+    const hint = document.getElementById('screen-control-hint');
+    if (!hint) return;
+    hint.textContent = this.keysLocked
+      ? 'Clicks, scrolling and all keys (including Esc and Alt+Tab) go to the host. Hold Esc to leave full screen.'
+      : 'Clicks, scrolling and keys go to the host while Remote control is on. Some browser shortcuts (like Ctrl+W) can\'t be captured; use the buttons above, or Full screen in Chrome or Edge.';
+  }
+
   closeViewer() {
+    this.setFullscreen(false);
     this.setControlling(false);
     this.viewing = -1;
     document.getElementById('screen-modal')?.classList.add('hidden');
@@ -975,6 +1039,8 @@ export class Screens {
     document.getElementById('screen-stage')?.classList.toggle('is-controlling', on);
     document.getElementById('screen-control-bar')?.classList.toggle('hidden', !on);
     document.getElementById('screen-control-hint')?.classList.toggle('hidden', !on);
+    this.updateKeyLock();
+    this.updateHint();
     if (!on) {
       this.inputQueue = [];
       clearTimeout(this.liveTimer);
@@ -1045,6 +1111,22 @@ export class Screens {
   }
 
   onKey(e) {
+    // Viewer shortcuts while not controlling: F toggles full screen, Esc
+    // leaves the fallback (non-API) full screen.
+    if (!this.controlling && this.viewing >= 0 && !e.ctrlKey && !e.altKey && !e.metaKey
+        && !isTextField(e.target)) {
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        this.setFullscreen(!this.fullscreen);
+        return;
+      }
+      if (e.key === 'Escape' && this.fullscreen) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.setFullscreen(false);
+        return;
+      }
+    }
     if (!this.controlling || e.isComposing) return;
     if (['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'Unidentified', 'Process', 'Dead'].includes(e.key)) return;
     const typeBox = document.getElementById('screen-type');
@@ -1110,4 +1192,11 @@ function captureFilename(serverName, displayName, at) {
   const pad = (n) => String(n).padStart(2, '0');
   const stamp = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}-${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
   return [clean(serverName), clean(displayName), stamp].filter(Boolean).join('-') + '.jpg';
+}
+
+// Typing targets where single-letter shortcuts must not fire.
+function isTextField(el) {
+  if (!el) return false;
+  if (el.isContentEditable || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true;
+  return el.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'range', 'color'].includes(el.type);
 }

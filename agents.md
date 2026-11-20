@@ -72,7 +72,7 @@ pc_monitor/
 │   ├── pairing/                    # Token gen, pairing URL, HTML card, pure-Go QR encoder + ANSI/SVG render
 │   └── tailcat/tunnel.go           # StartTunnel(): key persistence, DERP bootstrap
 ├── web/                            # Static client, deployed to GitHub Pages as-is
-│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=19); sections tagged data-section="…"
+│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=20); sections tagged data-section="…"
 │   ├── style.css                   # "Liquid Glass" theme, light + dark
 │   └── js/ app.js, client.js, ui.js, panel.js (Customize + Control Panel buttons), storage.js, charts.js, qr-scanner.js
 ├── scripts/                        # build.ps1/.sh (cross-compile), release.ps1/.sh (local packaging)
@@ -261,6 +261,7 @@ PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 
 - `/api/health` reports `screen_capture` (control enabled, not `-no-screen`, platform supported). The dashboard captures **only** on Capture or while Auto-refresh (default off, `localStorage[pc_monitor_screen_autorefresh]`) is on; ticks pause when the tab/section is hidden.
 - When testing, don't screenshot the dashboard after capturing: the preview contains the user's real screen. Verify captures by image size instead.
 - Viewer (`#screen-modal`): **Save** fetches `width=<native>` and downloads `<server>-<display>-<YYYY-MM-DD-HHMMSS>.jpg`. **Remote control** (shown when health `remote_input` = screen capture enabled + `display.InputSupported()`: Windows, Linux/xdotool) runs a live loop of 1600 px frames (250 ms gap, sooner after clicks/keys) and sends `/api/display/input` events through an ordered queue (consecutive moves collapse; moves ≤ 20/s). Keys are captured on `window` in the capture phase while controlling; printable keys go as `text`, others as `key` via `shortcutFromEvent`. Closing the viewer stops control.
+- Full screen (`Screens.setFullscreen`): `.is-fullscreen` on `.screen-card` (fixed overlay; works without the Fullscreen API) plus a non-awaited `requestFullscreen()` (the desktop app's pane rejects or never settles it). With real full screen + controlling, `navigator.keyboard.lock()` sends Esc/Alt+Tab/Ctrl+W to the host. Frames grow to `min(native, max(1600, stage px × dpr), 2560)`. **F** toggles, **Esc** exits while not controlling. Note `.modal-card` (max-width 480px) comes later in `style.css`; the viewer overrides it with `.modal-card.screen-card`.
 - Windows pointer input: `SetCursorPos` (physical px; process is per-monitor DPI aware) + `SendInput` `MOUSEINPUT` (40 bytes, guarded in `display_windows_test.go`). UIPI blocks input into elevated windows from a non-elevated server.
 - Testing remote control: stub `/api/display/input` and `/api/display/screenshot` in the page (`window.fetch` wrapper) so nothing real is clicked or captured; `server_test.go` stubs `Server.doPointer`/`doDeck`. Never send real pointer/key events to the dev desktop.
 

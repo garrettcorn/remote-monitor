@@ -1,11 +1,11 @@
 // Main Application Orchestrator for PC Monitor GitHub Pages Client
 
 import { ServerStore } from './storage.js';
-import { MonitorClient } from './client.js?v=19';
+import { MonitorClient } from './client.js?v=20';
 import { SparklineChart } from './charts.js';
-import { UI } from './ui.js?v=19';
+import { UI } from './ui.js?v=20';
 import { QRScanner } from './qr-scanner.js';
-import { Layout, Deck, Screens } from './panel.js?v=19';
+import { Layout, Deck, Screens } from './panel.js?v=20';
 
 class App {
   constructor() {

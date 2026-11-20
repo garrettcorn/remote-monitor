@@ -1746,16 +1746,24 @@ textarea.form-input { min-height: 96px; }
   backdrop-filter: blur(6px);
 }
 
-.screen-card { max-width: min(1400px, 96vw); }
+/* .modal-card (later in this file) caps dialogs at 480px; the viewer needs room. */
+.modal-card.screen-card { width: min(1400px, 96vw); max-width: none; padding: 18px; }
 
-.screen-card .modal-header { flex-wrap: wrap; gap: 10px; }
+.screen-card .modal-header {
+  display: grid;
+  grid-template-columns: minmax(0, auto) 1fr auto;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.screen-card .modal-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.screen-card .modal-header > .modal-close-btn { grid-column: 3; grid-row: 1; }
 
 .screen-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-left: auto;
+  justify-content: flex-end;
 }
 
 .screen-stage {
@@ -1799,6 +1807,34 @@ textarea.form-input { min-height: 96px; }
 
 .screen-hint { margin-top: 6px; font-size: 0.74rem; }
 
+/* Full screen viewer: the card fills the screen (Fullscreen API where
+   available, otherwise a fixed overlay, e.g. iPhone Safari). */
+.screen-card.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  width: auto; /* inset: 0 sizes it; 100vw would slide under a page scrollbar */
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+.screen-card.is-fullscreen .modal-header { flex: none; margin-bottom: 6px; }
+.screen-card.is-fullscreen .modal-title { font-size: 0.95rem; }
+.screen-card.is-fullscreen .screen-stage { flex: 1 1 auto; min-height: 0; border-radius: 6px; }
+.screen-card.is-fullscreen .screen-full { width: 100%; height: 100%; max-height: none; }
+.screen-card.is-fullscreen .screen-footer { flex: none; margin-top: 6px; }
+.screen-card.is-fullscreen .screen-hint { display: none; }
+.screen-card:fullscreen { background: var(--bg); }
+.screen-card::backdrop { background: var(--bg); }
+
 .screen-save-btn {
   position: absolute;
   left: 8px;
@@ -1817,7 +1853,7 @@ textarea.form-input { min-height: 96px; }
 
 @media (max-width: 600px) {
   .screen-card .modal-title { flex: 1; min-width: 0; }
-  .screen-toolbar { order: 3; margin-left: 0; width: 100%; gap: 6px; }
+  .screen-toolbar { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; gap: 6px; }
   .screen-control-bar { width: 100%; }
   .screen-type { flex: 1 1 100%; min-width: 0; }
 }
