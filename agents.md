@@ -1,6 +1,6 @@
 # Agent Handoff: Remote Monitor
 
-> Last updated: 2026-11-20 (release **v1.7.3**)  
+> Last updated: 2026-11-20 (release **v1.8.0**)  
 > Repo: https://github.com/garrettcorn/remote-monitor  
 > Pages: https://garrettcorn.github.io/remote-monitor/  
 > Local workspace: `c:\Users\jon\workspace\pc_monitor\`
@@ -123,6 +123,7 @@ No new third-party Go dependencies were added for audio/SMART/devices: Windows u
 | `v1.7.1` | Full screen screen viewer (Keyboard Lock while controlling); viewer no longer capped at 480 px |
 | `v1.7.2` | Lone modifier taps (`win`, `ctrl`, …) accepted as shortcuts; refused input events no longer end remote control |
 | `v1.7.3` | Windows update swap is all-or-nothing and survives a locked `.old` (old tray still running); tray relaunches itself after updates |
+| `v1.8.0` | Processes reworked: grouped by app, 5 s CPU smoothing, GPU/I/O columns, sort, search, Show all (`/api/processes`), details, End task (`pkg/procctl`), Windows app icons (`pkg/appicon`) |
 
 All released tags have 7 release assets.
 

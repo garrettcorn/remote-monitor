@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.0] - 2026-11-20
+
+### Changed
+- Group processes by app with combined CPU, memory and process count, and friendly program names ([`7542531`](https://github.com/garrettcorn/remote-monitor/commit/7542531))
+- Average process CPU over 5 seconds so the list is steady on a quiet computer ([`7542531`](https://github.com/garrettcorn/remote-monitor/commit/7542531))
+- Measure current process CPU on Linux instead of the average since the process started ([`7542531`](https://github.com/garrettcorn/remote-monitor/commit/7542531))
+- Rename Top Active Processes to Processes ([`7542531`](https://github.com/garrettcorn/remote-monitor/commit/7542531))
+
+### Added
+- Add sortable CPU, GPU, Memory and I/O columns to the process list ([`7542531`](https://github.com/garrettcorn/remote-monitor/commit/7542531))
+- Add process search and a Show all option ([`7542531`](https://github.com/garrettcorn/remote-monitor/commit/7542531))
+- Add process details: path, user, administrator, start time, parent, threads, handles and memory ([`7542531`](https://github.com/garrettcorn/remote-monitor/commit/7542531))
+- Add End task for an app or a single process, with system processes protected ([`7542531`](https://github.com/garrettcorn/remote-monitor/commit/7542531))
+- Add app icons to the process list on Windows ([`7542531`](https://github.com/garrettcorn/remote-monitor/commit/7542531))
+
 ## [1.7.3] - 2026-11-20
 
 ### Changed
@@ -178,6 +193,7 @@ All notable changes to this project will be documented in this file.
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
 
+[1.8.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.8.0
 [1.7.3]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.3
 [1.7.2]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.2
 [1.7.1]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.1
