@@ -56,7 +56,9 @@ export const UI = {
 
     // 1. Host Info
     this.setText('host-name', snap.host.hostname || 'Unknown');
-    this.setText('host-os', `${snap.host.os} ${snap.host.os_version || ''}`.trim());
+    // os_version is the full name ("Windows 11 Pro (25H2, Build 26200)");
+    // the short os id ("windows") is only a fallback.
+    this.setText('host-os', snap.host.os_version || snap.host.os || '');
     this.setText('host-uptime', this.formatUptime(snap.host.uptime_sec));
     this.setText('host-kernel', snap.host.kernel || snap.host.architecture);
     this.setText('host-procs', snap.host.process_count || snap.top_processes?.length || 0);
@@ -426,14 +428,15 @@ export const UI = {
       const snap = s.lastSnapshot;
       const cpu = snap?.cpu?.usage_percent !== undefined ? `${snap.cpu.usage_percent.toFixed(0)}%` : '--';
       const mem = snap?.memory?.usage_percent !== undefined ? `${snap.memory.usage_percent.toFixed(0)}%` : '--';
-      const osName = snap?.host?.os || 'System';
+      // "Windows 11 Pro (25H2, Build 26200)" -> "Windows 11 Pro"
+      const osName = (snap?.host?.os_version || '').replace(/\s*\(.*\)\s*$/, '') || snap?.host?.os || 'System';
 
       html += `
         <div class="fleet-card" data-server-id="${s.id}">
           <div class="fleet-card-header">
             <div>
               <div class="fleet-server-name">${esc(s.name)}</div>
-              <div class="sub-text">${osName} • ${s.tailcatAddr ? 'Tailcat' : 'Direct LAN'}</div>
+              <div class="sub-text">${esc(osName)} • ${s.tailcatAddr ? 'Tailcat' : 'Direct LAN'}</div>
             </div>
             <span class="status-badge ${s.status === 'online' ? 'status-online' : 'status-offline'}">
               ${s.status || 'Offline'}

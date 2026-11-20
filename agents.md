@@ -76,7 +76,7 @@ pc_monitor/
 │   ├── pairing/                    # Token gen, pairing URL, HTML card, pure-Go QR encoder + ANSI/SVG render
 │   └── tailcat/tunnel.go           # StartTunnel(): key persistence, DERP bootstrap
 ├── web/                            # Static client, deployed to GitHub Pages as-is
-│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=23); sections tagged data-section="…"
+│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=24); sections tagged data-section="…"
 │   ├── style.css                   # "Liquid Glass" theme, light + dark
 │   └── js/ app.js, client.js, ui.js, panel.js (Customize + Control Panel buttons), processes.js, storage.js, charts.js, qr-scanner.js
 ├── scripts/                        # build.ps1/.sh (cross-compile), release.ps1/.sh (local packaging)

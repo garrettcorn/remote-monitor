@@ -728,6 +728,7 @@ func getOSVersion() string {
 	prod, _, _ := k.GetStringValue("ProductName")
 	build, _, _ := k.GetStringValue("CurrentBuild")
 	displayVer, _, _ := k.GetStringValue("DisplayVersion")
+	prod = windowsProductName(prod, build)
 
 	if displayVer != "" {
 		return fmt.Sprintf("%s (%s, Build %s)", prod, displayVer, build)
