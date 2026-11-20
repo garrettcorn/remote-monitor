@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.3] - 2026-11-20
+
+### Changed
+- Restart the tray icon automatically after an update so it runs the new version ([`cb7d788`](https://github.com/garrettcorn/remote-monitor/commit/cb7d788))
+
+### Fixed
+- Fix Windows updates failing with "Access is denied" while a tray icon from an earlier version is running ([`cb7d788`](https://github.com/garrettcorn/remote-monitor/commit/cb7d788))
+- Fix a failed Windows update leaving the console and tray programs on different versions ([`cb7d788`](https://github.com/garrettcorn/remote-monitor/commit/cb7d788))
+
 ## [1.7.2] - 2026-11-20
 
 ### Changed
@@ -169,6 +178,7 @@ All notable changes to this project will be documented in this file.
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
 
+[1.7.3]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.3
 [1.7.2]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.2
 [1.7.1]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.1
 [1.7.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.0
