@@ -1,11 +1,12 @@
 // Main Application Orchestrator for PC Monitor GitHub Pages Client
 
 import { ServerStore } from './storage.js';
-import { MonitorClient } from './client.js?v=21';
+import { MonitorClient } from './client.js?v=23';
 import { SparklineChart } from './charts.js';
-import { UI } from './ui.js?v=21';
+import { UI } from './ui.js?v=23';
 import { QRScanner } from './qr-scanner.js';
-import { Layout, Deck, Screens } from './panel.js?v=21';
+import { Layout, Deck, Screens } from './panel.js?v=23';
+import { Processes } from './processes.js?v=23';
 
 class App {
   constructor() {
@@ -23,6 +24,7 @@ class App {
     Layout.apply(false);
     this.deck = new Deck(this);
     this.screens = new Screens(this);
+    this.processes = new Processes(this);
     this.initCharts();
     this.initEvents();
     this.initSettings();
@@ -446,6 +448,9 @@ class App {
       server.controlEnabled = !!health.control_enabled;
       server.screenCapture = !!health.screen_capture;
       server.remoteInput = !!health.remote_input;
+      server.processList = !!health.process_list;
+      server.processEnd = !!health.process_end && !!health.control_enabled;
+      server.processIcons = !!health.process_icons;
       server.version = health.version || '';
       server.update = health.update || null;
       ServerStore.saveServer(server);
@@ -454,6 +459,7 @@ class App {
     this.setControlUI(!!server.controlEnabled);
     this.deck.setServer(server);
     this.screens.setServer(server, !!server.screenCapture && !!server.controlEnabled, !!server.remoteInput);
+    this.processes.setServer(server);
     if (health?.pin_required && !server.session) {
       this.requirePIN(server);
       return;
@@ -472,6 +478,7 @@ class App {
         UI.renderSnapshot(snapshot, this.charts);
         this.renderAudio(snapshot.audio);
         this.screens.update(snapshot.displays);
+        this.processes.update(snapshot);
         this.deck.setLiveState(snapshot);
       },
       (status, message) => {

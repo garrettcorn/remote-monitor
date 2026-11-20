@@ -229,13 +229,17 @@ func collectTemperatures(gpus []GPUInfo) []TempSensor {
 	return sensors
 }
 
-func (c *Collector) collectProcesses(now time.Time, totalMem uint64) ([]ProcessInfo, int) {
-	out, err := exec.Command("ps", "-arcwwwxo", "pid,%cpu,%mem,rss,comm").Output()
+// sampleProcesses uses ps's cumulative CPU time (macOS has no /proc).
+// Per-process I/O isn't available without elevated tools.
+func (c *Collector) sampleProcesses() ([]procSample, bool) {
+	out, err := exec.Command("ps", "-axo", "pid=,time=,rss=,comm=").Output()
 	if err != nil {
-		return nil, 0
+		return nil, false
 	}
-	return parsePS(out)
+	return parseDarwinPS(out), false
 }
+
+func friendlyName(string) string { return "" }
 
 // systemUptime derives uptime from kern.boottime, e.g.
 // "{ sec = 1731990000, usec = 123456 } Tue Nov 19 ...".

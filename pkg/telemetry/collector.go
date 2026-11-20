@@ -20,10 +20,17 @@ type Collector struct {
 	startTime    time.Time
 	interval     time.Duration
 
-	// Per-process CPU time samples (used by platforms that compute
-	// process CPU % from deltas, e.g. Windows).
-	prevProcTimes map[procKey]uint64
-	prevProcStamp time.Time
+	// Per-process state for smoothed rates (processes.go) and friendly
+	// program names cached by executable path.
+	procs     map[procID]*procState
+	procStamp time.Time
+	titles    map[string]string
+
+	// Every app from the latest sample, for /api/processes (read by HTTP
+	// handlers, so guarded separately from the sampling state above).
+	procMu   sync.Mutex
+	allApps  []AppGroup
+	allTotal int
 
 	// Per-disk I/O counters for platforms that compute rates from deltas.
 	prevDisk      map[string]diskSample
@@ -55,11 +62,6 @@ type slowData struct {
 }
 
 const slowInterval = 30 * time.Second
-
-type procKey struct {
-	pid     uint32
-	created uint64
-}
 
 type cpuTimes struct {
 	timestamp time.Time
@@ -157,7 +159,15 @@ func (c *Collector) collect() {
 	snap.Network = c.collectNetwork(now)
 	snap.GPUs = collectGPUs()
 	snap.Temperatures = collectTemperatures(snap.GPUs)
-	snap.TopProcesses, snap.Host.ProcessCount = c.collectProcesses(now, snap.Memory.TotalBytes)
+	samples, ioOK := c.sampleProcesses()
+	snap.Apps, snap.TopProcesses, snap.AppCount, snap.Host.ProcessCount = c.processStats(now, samples, snap.Memory.TotalBytes)
+	snap.IOAvailable = ioOK
+	for _, s := range samples {
+		if s.HasGPU {
+			snap.GPUAvailable = true
+			break
+		}
+	}
 	snap.Battery = collectBattery()
 
 	if st, err := audio.Get(); err == nil {

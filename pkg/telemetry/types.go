@@ -17,7 +17,11 @@ type SystemSnapshot struct {
 	Temperatures []TempSensor      `json:"temperatures"`
 	Drives       []DriveInfo       `json:"drives"`
 	Network      NetworkInfo       `json:"network"`
-	TopProcesses []ProcessInfo     `json:"top_processes"`
+	TopProcesses []ProcessInfo     `json:"top_processes"` // busiest processes (kept for older dashboards)
+	Apps         []AppGroup        `json:"apps"`          // top apps by CPU, memory and I/O
+	AppCount     int               `json:"app_count"`     // distinct programs running
+	IOAvailable  bool              `json:"process_io"`    // per-process I/O rates are measured on this host
+	GPUAvailable bool              `json:"process_gpu"`   // per-process GPU % is measured on this host
 	Disks        []PhysicalDisk    `json:"physical_disks"`
 	SMARTDetails bool              `json:"smart_details_available"` // any drive returned detailed SMART counters
 	Elevated     bool              `json:"server_elevated"`         // server runs as administrator (Windows) / root
@@ -172,11 +176,49 @@ type NetInterface struct {
 	LinkMbps  uint64   `json:"link_speed_mbps,omitempty"`
 }
 
-// ProcessInfo represents a high-utilization running process.
+// ProcessInfo is one running process. CPU and I/O rates are averaged over
+// a few seconds (see processes.go).
 type ProcessInfo struct {
 	PID           int     `json:"pid"`
 	Name          string  `json:"name"`
 	CPUPercent    float64 `json:"cpu_percent"`
 	MemoryPercent float64 `json:"memory_percent"`
 	MemoryBytes   uint64  `json:"memory_bytes"`
+	ReadBps       uint64  `json:"read_bps,omitempty"`    // file/device/network reads (Windows), disk reads (Linux)
+	WriteBps      uint64  `json:"write_bps,omitempty"`   // likewise for writes
+	GPUPercent    float64 `json:"gpu_percent,omitempty"` // busiest GPU engine type (Windows)
+}
+
+// AppGroup is all processes of one program (e.g. every brave.exe) added up.
+type AppGroup struct {
+	Name          string        `json:"name"`            // executable name
+	Title         string        `json:"title,omitempty"` // friendly name, e.g. "Brave Browser"
+	Count         int           `json:"count"`           // number of processes
+	CPUPercent    float64       `json:"cpu_percent"`
+	MemoryPercent float64       `json:"memory_percent"`
+	MemoryBytes   uint64        `json:"memory_bytes"`
+	ReadBps       uint64        `json:"read_bps,omitempty"`
+	WriteBps      uint64        `json:"write_bps,omitempty"`
+	GPUPercent    float64       `json:"gpu_percent,omitempty"`
+	Processes     []ProcessInfo `json:"processes"` // busiest few, for the expanded row
+	Path          string        `json:"-"`         // executable path (for the icon), not sent
+}
+
+// ProcessDetail is the on-demand detail view of one process. Command lines
+// are deliberately not included: they often contain passwords or tokens.
+type ProcessDetail struct {
+	PID          int        `json:"pid"`
+	Name         string     `json:"name"`
+	Title        string     `json:"title,omitempty"`
+	Path         string     `json:"path,omitempty"`
+	User         string     `json:"user,omitempty"`
+	ParentPID    int        `json:"parent_pid,omitempty"`
+	ParentName   string     `json:"parent_name,omitempty"`
+	Started      *time.Time `json:"started,omitempty"`
+	Threads      int        `json:"threads,omitempty"`
+	Handles      int        `json:"handles,omitempty"` // open handles (Windows) / file descriptors (Linux)
+	MemoryBytes  uint64     `json:"memory_bytes,omitempty"`
+	PrivateBytes uint64     `json:"private_bytes,omitempty"`
+	PeakBytes    uint64     `json:"peak_bytes,omitempty"`
+	Elevated     *bool      `json:"elevated,omitempty"` // runs as administrator / root
 }

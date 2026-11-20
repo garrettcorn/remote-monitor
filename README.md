@@ -29,7 +29,7 @@ A lightweight, cross-platform system monitor and real-time dashboard powered by 
 - **Memory**: Total, used, free, and available RAM with usage %, plus swap / pagefile breakdown.
 - **Storage**: Real-time disk capacity visualizer for every drive (`C:`, `/`, `/home`) showing total, used, and free space with filesystem type (NTFS, APFS, ext4, etc.).
 - **Network Activity**: Interface list with MAC addresses, IPv4, IPv6, active link state, instantaneous download/upload speeds (KB/s, MB/s), and total RX/TX byte counters.
-- **Operating System & Host**: Hostname, OS version/build, kernel, uptime, and top active processes by memory and CPU.
+- **Operating System & Host**: Hostname, OS version/build, kernel, uptime, and running apps grouped by program with CPU, GPU, memory and I/O, search, details and End task.
 
 ### 3. Instant 3-Way Pairing
 When the server starts, it automatically outputs:
@@ -57,7 +57,11 @@ When the server starts, it automatically outputs:
 | **Per-core CPU** | ✅ `NtQuerySystemInformation` (processor performance counters) | ✅ `/proc/stat` per-CPU lines | 🟡 shows overall load for every core |
 | **Memory & swap** | ✅ `GlobalMemoryStatusEx` | ✅ `/proc/meminfo` | ✅ `sysctl hw.memsize`, `vm_stat` |
 | **Uptime** | ✅ `GetTickCount64` | ✅ `/proc/uptime` | ✅ `sysctl kern.boottime` |
-| **Processes (top 10, count)** | ✅ Toolhelp snapshot + `GetProcessTimes` / `K32GetProcessMemoryInfo` | ✅ `ps -eo pid,%cpu,%mem,rss,comm` | ✅ `ps -arcwwwxo …` |
+| **Processes (grouped by app, CPU averaged over 5 s)** | ✅ Toolhelp snapshot + `GetProcessTimes` / `K32GetProcessMemoryInfo` / `GetProcessIoCounters`; names from each exe's version info | ✅ `/proc/<pid>/stat`, `io` (I/O for your own processes, or all as root) | 🟡 `ps -axo pid,time,rss,comm` (no I/O) |
+| **Per-process GPU** | ✅ `GPU Engine` performance counters (busiest engine, like Task Manager) | ❌ | ❌ |
+| **Process details** | ✅ Toolhelp, process token (user, administrator), handle count, private memory | ✅ `/proc/<pid>/status`, `fd`, `exe` | 🟡 `ps` (user, parent, start time) |
+| **End task** | ✅ `TerminateProcess` | ✅ `SIGTERM` | ✅ `SIGTERM` |
+| **App icons** | ✅ `ExtractIconExW` → PNG | ❌ letter badges | ❌ letter badges |
 | **Signed-in users** | ✅ `WTSEnumerateSessions` (Remote Desktop Services API) | ✅ `who` | ✅ `who` |
 | **Battery** | ✅ `GetSystemPowerStatus` | ✅ `/sys/class/power_supply/BAT*` | ✅ `pmset -g batt` |
 | **GPU** | ✅ `nvidia-smi` (load, VRAM, temp, power, fan, clocks); name only for AMD/Intel via the registry | 🟡 `nvidia-smi` (load, VRAM, temp); NVIDIA only | 🟡 name only via `system_profiler SPDisplaysDataType` |
@@ -220,6 +224,15 @@ The **Displays** section lists each connected display with its model name, resol
 
 Screen preview and remote control are never available in `-read-only` mode, and `-no-screen` disables both. Remote control works on Windows (and Linux X11 with `xdotool`, where screen capture isn't available yet); it is not supported on macOS. A server that isn't running as administrator can't click or type into windows that are (Windows blocks it).
 
+### Processes
+
+The **Processes** section groups running processes by program, so a browser with 19 processes is one row showing its combined use. Each row shows the program's friendly name and icon (Windows), how many processes it runs, and its **CPU** (averaged over 5 seconds so a quiet PC shows a steady list), **GPU** (Windows), **Memory** and **I/O** (reads and writes per second).
+
+- Click a column heading to sort; your choice is remembered. The top 10 apps are shown; **Show all** lists every app.
+- **Search** by app name, file name or PID.
+- Click an app to see its processes, then click a process for details: path, user, whether it runs as administrator, start time, parent process, threads, handles and memory. Command lines are never shown, since they can contain passwords.
+- **End task** (PIN-paired dashboards only, never in `-read-only` mode) ends a whole app or a single process after you confirm. Windows system processes such as `csrss`, `lsass`, `winlogon` and `svchost`, and PC Monitor itself, are protected. A server that isn't running as administrator can't end elevated programs.
+
 ### Customize the Dashboard
 
 Click the **sliders icon** in the header to show or hide any section (CPU, memory, buttons, audio, power, drive health, processes, and so on). Hidden cards leave no gaps, and your choices are saved in this browser.
@@ -368,7 +381,8 @@ pc_monitor/
 │       ├── app.js          # App orchestrator & hash router
 │       ├── storage.js      # Multi-server localStorage registry
 │       ├── client.js       # WebSocket, HTTP polling & Tailcat WASM client
-│       ├── ui.js           # DOM renderer, SVG gauges, and process tables
+│       ├── ui.js           # DOM renderer and SVG gauges
+│       ├── processes.js    # Processes section (apps, search, details, End task)
 │       ├── charts.js       # High-DPI Canvas sparkline charts
 │       └── qr-scanner.js   # In-browser camera QR code reader
 ├── scripts/

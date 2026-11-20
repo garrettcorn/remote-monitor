@@ -424,13 +424,48 @@ func collectTemperatures(gpus []GPUInfo) []TempSensor {
 	return sensors
 }
 
-func (c *Collector) collectProcesses(now time.Time, totalMem uint64) ([]ProcessInfo, int) {
-	out, err := exec.Command("ps", "-eo", "pid,%cpu,%mem,rss,comm", "--sort=-%cpu").Output()
+// sampleProcesses reads /proc/<pid>/{stat,io,exe}. I/O and the executable
+// path are only readable for the server's own user (or as root).
+func (c *Collector) sampleProcesses() ([]procSample, bool) {
+	entries, err := os.ReadDir("/proc")
 	if err != nil {
-		return nil, 0
+		return nil, false
 	}
-	return parsePS(out)
+	const clkTck = 100 // USER_HZ; 100 on every mainstream Linux
+	page := uint64(os.Getpagesize())
+	var out []procSample
+	anyIO := false
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		dir := "/proc/" + e.Name()
+		data, err := os.ReadFile(dir + "/stat")
+		if err != nil {
+			continue // exited meanwhile
+		}
+		name, ticks, start, rss, ok := parseProcStat(string(data))
+		if !ok {
+			continue
+		}
+		s := procSample{PID: pid, Start: start, Name: name, Mem: rss * page,
+			CPU: time.Duration(ticks) * time.Second / clkTck, HasCPU: true}
+		if io, err := os.ReadFile(dir + "/io"); err == nil {
+			s.Read, s.Write, s.HasIO = parseProcIO(string(io))
+			anyIO = anyIO || s.HasIO
+		}
+		if st := c.procs[procID{pid, start}]; st != nil && st.path != "" {
+			s.Path = st.path
+		} else if p, err := os.Readlink(dir + "/exe"); err == nil {
+			s.Path = p
+		}
+		out = append(out, s)
+	}
+	return out, anyIO
 }
+
+func friendlyName(string) string { return "" }
 
 // systemUptime reads the OS uptime from /proc/uptime.
 func systemUptime() (time.Duration, bool) {

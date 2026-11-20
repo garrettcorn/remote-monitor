@@ -79,9 +79,9 @@ func collectTemperatures(gpus []GPUInfo) []TempSensor {
 	return []TempSensor{}
 }
 
-func (c *Collector) collectProcesses(now time.Time, totalMem uint64) ([]ProcessInfo, int) {
-	return []ProcessInfo{}, 0
-}
+func (c *Collector) sampleProcesses() ([]procSample, bool) { return nil, false }
+
+func friendlyName(string) string { return "" }
 
 // systemUptime is unavailable on unsupported platforms; the caller falls
 // back to server uptime.

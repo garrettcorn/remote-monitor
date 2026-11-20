@@ -1912,6 +1912,180 @@ textarea.form-input { min-height: 96px; }
 
 .proc-name { font-weight: 600; }
 
+/* Processes (grouped by app) */
+.proc-table th.num,
+.proc-table td.num { text-align: right; white-space: nowrap; }
+.proc-table th[data-col="cpu"] { width: 110px; }
+.proc-table th[data-col="mem"] { width: 130px; }
+.proc-table th[data-col="io"] { width: 120px; }
+.proc-table th[data-col="gpu"] { width: 96px; }
+
+.proc-sort {
+  padding: 0;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: none;
+  cursor: pointer;
+}
+.proc-sort:hover,
+.proc-table th.is-sorted .proc-sort { color: var(--text-main); }
+.proc-sort:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
+.sort-arrow { font-size: 0.6rem; }
+
+.proc-app { cursor: pointer; }
+.proc-app:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.proc-app.is-open { background: var(--inner-fill); }
+
+.proc-app-name { min-width: 0; }
+.proc-chevron {
+  display: inline-block;
+  width: 1em;
+  margin-right: 6px;
+  color: var(--text-muted);
+  vertical-align: top;
+}
+.proc-name-row { display: flex; align-items: flex-start; min-width: 0; }
+.proc-label { flex: 0 1 auto; min-width: 0; }
+.proc-name-row > .proc-chevron,
+.proc-name-row > .proc-icon,
+.proc-name-row > .proc-avatar,
+.proc-name-row > .proc-count { flex: none; }
+
+.proc-icon,
+.proc-avatar {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  margin-right: 10px;
+  vertical-align: top;
+  border-radius: 6px;
+}
+.proc-icon { object-fit: contain; }
+.proc-avatar {
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+  color: #fff;
+  background: hsl(var(--hue, 210) 45% 45%);
+}
+.proc-title {
+  display: block;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.proc-exe {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.proc-label .proc-exe { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proc-count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--inner-fill);
+  border: 1px solid var(--inner-stroke);
+  vertical-align: top;
+}
+
+.proc-val { display: block; font-variant-numeric: tabular-nums; }
+.proc-bar {
+  display: block;
+  width: 72px;
+  height: 4px;
+  margin: 5px 0 0 auto;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--inner-fill);
+}
+.proc-bar > span { display: block; height: 100%; border-radius: inherit; }
+.proc-bar.cpu > span { background: var(--blue); }
+.proc-bar.mem > span { background: var(--purple, #bf5af2); }
+.proc-bar.gpu > span { background: var(--green); }
+
+.proc-search { width: 220px; padding: 7px 12px; font-size: 0.82rem; }
+
+.link-btn {
+  padding: 0;
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--blue);
+  background: none;
+  cursor: pointer;
+}
+.link-btn:hover { text-decoration: underline; }
+.link-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
+
+.proc-footer td { text-align: center; font-size: 0.8rem; }
+.proc-actions td { padding-left: 40px; }
+.proc-child.is-hit td { box-shadow: inset 3px 0 0 var(--blue); }
+
+.proc-end-btn {
+  float: right;
+  padding: 1px 9px;
+  border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--red);
+  background: none;
+  cursor: pointer;
+}
+.proc-end-btn:hover { background: color-mix(in srgb, var(--red) 14%, transparent); }
+.proc-end-btn:disabled { opacity: 0.5; cursor: default; }
+
+.proc-child.is-clickable { cursor: pointer; }
+.proc-child.is-clickable:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.proc-child.is-open td { background: var(--inner-fill-hover); }
+
+.proc-detail td { padding: 10px 16px 14px 40px; background: var(--inner-fill-hover); }
+.proc-dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+.proc-dl dt { color: var(--text-muted); font-weight: 600; }
+.proc-dl dd { margin: 0; min-width: 0; }
+.proc-path { font-family: var(--font-mono); font-size: 0.74rem; word-break: break-all; }
+
+.proc-child td { padding-top: 6px; padding-bottom: 6px; font-size: 0.8rem; background: var(--inner-fill); }
+.proc-child .proc-app-name { padding-left: 40px; }
+.proc-more td { color: var(--text-muted); }
+
+@media (max-width: 600px) {
+  .proc-table th, .proc-table td { padding: 9px 10px; }
+  .proc-table th[data-col="io"], .proc-table .proc-io,
+  .proc-table th[data-col="gpu"], .proc-table .proc-gpu { display: none; }
+  .proc-table th[data-col="cpu"] { width: 70px; }
+  .proc-table th[data-col="mem"] { width: 86px; }
+  /* Name column takes the leftover width and truncates (auto layout). */
+  .proc-table th[data-col="name"], .proc-table .proc-app-name { width: 100%; max-width: 0; overflow: hidden; }
+  .proc-count { margin-left: 4px; }
+  .proc-icon, .proc-avatar { margin-right: 6px; }
+  .proc-chevron { margin-right: 2px; }
+  .proc-bar { width: 48px; }
+  .proc-child .proc-app-name, .proc-actions td, .proc-detail td { padding-left: 24px; }
+  .proc-dl { grid-template-columns: 1fr; gap: 2px; }
+  .proc-dl dd { margin-bottom: 6px; }
+  .proc-search { width: 100%; }
+  [data-section="processes"] .card-header { flex-wrap: wrap; }
+}
+
 /* ---------------------------------------------------------------------
    Fleet overview
    --------------------------------------------------------------------- */

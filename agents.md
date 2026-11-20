@@ -65,16 +65,20 @@ pc_monitor/
 │   ├── telemetry/
 │   │   ├── types.go                # SystemSnapshot and all JSON types
 │   │   ├── collector.go            # Sampling loop, audio refresh, slow background refresh (30 s)
-│   │   ├── collector_<os>.go       # CPU, memory, drives (+I/O), network, GPU, temps, processes per OS
+│   │   ├── collector_<os>.go       # CPU, memory, drives (+I/O), network, GPU, temps, raw process samples per OS
+│   │   ├── processes.go            # Shared process smoothing (5 s EMA), app grouping, top-N selection
+│   │   ├── process_detail_<os>.go  # On-demand process details
 │   │   ├── extra_<os>.go           # battery, physical disks/SMART, connected devices, users per OS
 │   │   ├── pdh_windows.go          # Reusable PDH perf-counter query (disk I/O)
 │   │   └── ps_unix.go              # Shared `ps` / `who` parsing (linux, darwin)
+│   ├── procctl/                    # End task: name-checked, protected-process list, TerminateProcess / SIGTERM
+│   ├── appicon/                    # Exe icon → PNG (Windows ExtractIconExW), cached per path
 │   ├── pairing/                    # Token gen, pairing URL, HTML card, pure-Go QR encoder + ANSI/SVG render
 │   └── tailcat/tunnel.go           # StartTunnel(): key persistence, DERP bootstrap
 ├── web/                            # Static client, deployed to GitHub Pages as-is
-│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=21); sections tagged data-section="…"
+│   ├── index.html                  # Asset URLs carry ?v=N cache-busters (currently v=23); sections tagged data-section="…"
 │   ├── style.css                   # "Liquid Glass" theme, light + dark
-│   └── js/ app.js, client.js, ui.js, panel.js (Customize + Control Panel buttons), storage.js, charts.js, qr-scanner.js
+│   └── js/ app.js, client.js, ui.js, panel.js (Customize + Control Panel buttons), processes.js, storage.js, charts.js, qr-scanner.js
 ├── scripts/                        # build.ps1/.sh (cross-compile), release.ps1/.sh (local packaging)
 ├── .github/workflows/              # ci.yml, deploy-pages.yml, release.yml
 ├── CHANGELOG.md                    # Common Changelog format
@@ -217,6 +221,10 @@ PIN: 4 digits (crypto/rand), constant-time compare, one-time; rotated after use 
 | `POST` | `/api/deck/press` | token + session | `{type, key?, keys?, url?, id?, text?}`; type is `media`, `hotkey`, `lock`, `mic_mute`, `url`, `launch`, `app` or `text` |
 | `GET` | `/api/display/screenshot` | token + session | `?index=N&width=W` → `image/jpeg` (`no-store`); 403 `screen_disabled` with `-no-screen`; never in read-only |
 | `POST` | `/api/display/input` | token + session | `{index, type, x, y, button?, dx?, dy?}` pointer (`move`/`down`/`up`/`click`/`dblclick`/`scroll`, x/y 0–1 of that display) or `{type:"key", keys}` / `{type:"text", text}` (deck hotkey/text paths); 403 `input_disabled` unless `remote_input` |
+| `GET` | `/api/processes` | token (+ session) | Every app with all its processes (`apps`, `total`, `app_count`); fetched only while searching / Show all |
+| `GET` | `/api/processes/detail` | token (+ session) | `?pid=N` → path, user, elevated, started, parent, threads, handles, private/peak memory (no command lines) |
+| `GET` | `/api/processes/icon` | token (+ session) | `?name=brave.exe` → 32 px PNG of a **running** app's exe icon (Windows); `204` when none |
+| `POST` | `/api/processes/end` | token + session | `{name, pids}`: each PID must still be `name` (recycled-PID guard); `procctl.Protected` refuses system processes and PC Monitor; `409 end_failed` if none ended |
 
 Token: `?token=`, `X-Pairing-Token`, or `Authorization: Bearer`. Session: `X-Session` or `?session=`.
 
@@ -267,6 +275,13 @@ PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 
 - Full screen (`Screens.setFullscreen`): `.is-fullscreen` on `.screen-card` (fixed overlay; works without the Fullscreen API) plus a non-awaited `requestFullscreen()` (the desktop app's pane rejects or never settles it). With real full screen + controlling, `navigator.keyboard.lock()` sends Esc/Alt+Tab/Ctrl+W to the host. Frames grow to `min(native, max(1600, stage px × dpr), 2560)`. **F** toggles, **Esc** exits while not controlling. Note `.modal-card` (max-width 480px) comes later in `style.css`; the viewer overrides it with `.modal-card.screen-card`.
 - Windows pointer input: `SetCursorPos` (physical px; process is per-monitor DPI aware) + `SendInput` `MOUSEINPUT` (40 bytes, guarded in `display_windows_test.go`). UIPI blocks input into elevated windows from a non-elevated server.
 - Testing remote control: stub `/api/display/input` and `/api/display/screenshot` in the page (`window.fetch` wrapper) so nothing real is clicked or captured; `server_test.go` stubs `Server.doPointer`/`doDeck`. Never send real pointer/key events to the dev desktop.
+
+### Processes (`pkg/telemetry/processes.go`, `pkg/procctl`, `pkg/appicon`, `web/js/processes.js`)
+- Two layers: per-OS `sampleProcesses()` returns raw cumulative counters (`procSample`: CPU time, working set, I/O bytes, path, GPU %); shared `processStats` keeps per-process state keyed by (PID, start time), smooths CPU/I/O/GPU with a 5 s exponential moving average (Windows counts process CPU in 15.6 ms ticks, so single samples are noise), groups by lowercase exe name into `AppGroup`s and keeps the top 12 apps per metric that actually use it (`pickApps`), with ≤ 5 processes each in the snapshot.
+- Snapshot fields: `apps`, `app_count`, `process_io`, `process_gpu`; `top_processes` stays for old dashboards. Health: `process_list`, `process_end`, `process_icons`.
+- Windows: `GetProcessIoCounters` (all I/O, not just disk), `QueryFullProcessImageName` once per process, `FileDescription` from version info as the friendly name (cached per path in the sampling goroutine; HTTP handlers use uncached `titleFor`), per-process GPU from PDH `\GPU Engine(*)\Utilization Percentage` (`gpuByPID`: sum per engine type, max across types). Linux reads `/proc` directly (`USER_HZ` = 100); macOS uses `ps -axo pid=,time=,rss=,comm=`. Parsers live in untagged `processes_parse.go` / `gpu_engine.go` so they're tested on Windows.
+- Dashboard: `Processes` class (own module). Sort saved in `localStorage[pc_monitor_proc_sort]`; full list polled every 3 s only while searching / Show all and visible; icons fetched with auth headers into object URLs (never token-in-URL `<img>`), 3 at a time.
+- Testing End task: only end processes the test started itself (`procctl_test` re-execs itself; browser tests used throwaway `PING.EXE`). Never test `Protected` by actually calling End on a system process.
 
 ### Control Panel buttons (`pkg/deck`, `web/js/panel.js`)
 - Action types: `media` (play_pause/next/previous/stop/volume_up/volume_down/volume_mute), `hotkey` (`ctrl+shift+m`: modifiers ctrl/shift/alt/win + one key a–z, 0–9, f1–f24 or named), `lock`, `mic_mute`, `url` (http/https only), `launch` (id from `~/.pc_monitor/actions.json`; paths never leave the server).

@@ -132,8 +132,6 @@ export const UI = {
     // 8. Network Interfaces
     this.renderInterfaces(snap.network.interfaces);
 
-    // 9. Top Processes
-    this.renderProcesses(snap.top_processes);
 
     // 10. Drive health / SMART and connected devices
     this.renderDiskHealth(snap.physical_disks, snap.smart_details_available, snap.server_elevated);
@@ -408,29 +406,6 @@ export const UI = {
       `;
     });
     container.innerHTML = html;
-  },
-
-  renderProcesses(procs = []) {
-    const tbody = document.getElementById('process-table-body');
-    if (!tbody) return;
-
-    if (!procs || procs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" class="text-center sub-text">No process data available</td></tr>';
-      return;
-    }
-
-    let html = '';
-    procs.forEach((p) => {
-      html += `
-        <tr>
-          <td><span class="pid-badge">${p.pid}</span></td>
-          <td class="proc-name">${esc(p.name)}</td>
-          <td>${(p.cpu_percent || 0).toFixed(1)}%</td>
-          <td>${this.formatBytes(p.memory_bytes)}</td>
-        </tr>
-      `;
-    });
-    tbody.innerHTML = html;
   },
 
   renderFleetOverview(servers, onSelectServer) {

@@ -9,7 +9,6 @@ import (
 	"net"
 	"os/exec"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -606,75 +605,117 @@ type processMemoryCounters struct {
 	PeakPagefileUsage          uintptr
 }
 
-// collectProcesses enumerates all processes, computes CPU % from deltas of
-// kernel+user time (normalised to all cores, like Task Manager), and returns
-// the top 10 by CPU then memory, plus the total process count.
-func (c *Collector) collectProcesses(now time.Time, totalMem uint64) ([]ProcessInfo, int) {
+var procGetProcessIoCounters = modkernel32.NewProc("GetProcessIoCounters")
+
+var (
+	gpuOnce  sync.Once
+	gpuQuery *pdhQuery
+)
+
+// ioCounters mirrors IO_COUNTERS.
+type ioCounters struct {
+	ReadOperationCount, WriteOperationCount, OtherOperationCount uint64
+	ReadTransferCount, WriteTransferCount, OtherTransferCount    uint64
+}
+
+// sampleProcesses reads every process's cumulative CPU time, working set,
+// I/O byte counters and executable path. Protected processes that can't be
+// opened are still counted, by name only.
+func (c *Collector) sampleProcesses() ([]procSample, bool) {
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
-		return nil, 0
+		return nil, false
 	}
 	defer windows.CloseHandle(snapshot)
 
-	elapsed := now.Sub(c.prevProcStamp).Seconds()
-	havePrev := c.prevProcTimes != nil && elapsed > 0
-	numCPU := float64(runtime.NumCPU())
-	current := make(map[procKey]uint64)
+	// Per-process GPU from the "GPU Engine" counters (Windows 10 1709+).
+	gpuOnce.Do(func() { gpuQuery = openPDH(`\GPU Engine(*)\Utilization Percentage`) })
+	var gpu map[int]float64
+	haveGPU := gpuQuery.collect()
+	if haveGPU {
+		gpu = gpuByPID(gpuQuery.values(0))
+	}
 
-	var procs []ProcessInfo
+	var out []procSample
 	var entry windows.ProcessEntry32
 	entry.Size = uint32(unsafe.Sizeof(entry))
 	for err = windows.Process32First(snapshot, &entry); err == nil; err = windows.Process32Next(snapshot, &entry) {
 		if entry.ProcessID == 0 { // System Idle Process
 			continue
 		}
-		p := ProcessInfo{
-			PID:  int(entry.ProcessID),
-			Name: windows.UTF16ToString(entry.ExeFile[:]),
-		}
-
+		s := procSample{PID: int(entry.ProcessID), Name: windows.UTF16ToString(entry.ExeFile[:])}
+		s.GPU, s.HasGPU = gpu[s.PID], haveGPU
 		h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, entry.ProcessID)
 		if err == nil {
 			var created, exited, kernel, user windows.Filetime
 			if windows.GetProcessTimes(h, &created, &exited, &kernel, &user) == nil {
-				key := procKey{entry.ProcessID, fileTimeToUint64(created)}
-				cpuTime := fileTimeToUint64(kernel) + fileTimeToUint64(user) // 100ns units
-				current[key] = cpuTime
-				if prev, ok := c.prevProcTimes[key]; ok && havePrev && cpuTime >= prev {
-					pct := float64(cpuTime-prev) / (elapsed * 1e7) / numCPU * 100.0
-					if pct > 100 {
-						pct = 100
-					}
-					p.CPUPercent = pct
-				}
+				s.Start = fileTimeToUint64(created)
+				s.CPU = time.Duration(fileTimeToUint64(kernel)+fileTimeToUint64(user)) * 100 // 100 ns units
+				s.HasCPU = true
 			}
 			var pmc processMemoryCounters
 			pmc.cb = uint32(unsafe.Sizeof(pmc))
 			if r, _, _ := procK32GetProcessMemoryInfo.Call(uintptr(h), uintptr(unsafe.Pointer(&pmc)), uintptr(pmc.cb)); r != 0 {
-				p.MemoryBytes = uint64(pmc.WorkingSetSize)
-				if totalMem > 0 {
-					p.MemoryPercent = float64(p.MemoryBytes) / float64(totalMem) * 100.0
-				}
+				s.Mem = uint64(pmc.WorkingSetSize)
+			}
+			var io ioCounters
+			if r, _, _ := procGetProcessIoCounters.Call(uintptr(h), uintptr(unsafe.Pointer(&io))); r != 0 {
+				s.Read, s.Write, s.HasIO = io.ReadTransferCount, io.WriteTransferCount, true
+			}
+			// The path only needs looking up once per process instance.
+			if st := c.procs[procID{s.PID, s.Start}]; st != nil && st.path != "" {
+				s.Path = st.path
+			} else {
+				s.Path = processPath(h)
 			}
 			windows.CloseHandle(h)
 		}
-		procs = append(procs, p)
+		out = append(out, s)
 	}
+	return out, true
+}
 
-	c.prevProcTimes = current
-	c.prevProcStamp = now
+func processPath(h windows.Handle) string {
+	buf := make([]uint16, windows.MAX_LONG_PATH)
+	n := uint32(len(buf))
+	if err := windows.QueryFullProcessImageName(h, 0, &buf[0], &n); err != nil {
+		return ""
+	}
+	return windows.UTF16ToString(buf[:n])
+}
 
-	total := len(procs)
-	sort.Slice(procs, func(i, j int) bool {
-		if procs[i].CPUPercent != procs[j].CPUPercent {
-			return procs[i].CPUPercent > procs[j].CPUPercent
+// friendlyName reads FileDescription from an executable's version info,
+// e.g. "Brave Browser" for brave.exe.
+func friendlyName(path string) string {
+	size, err := windows.GetFileVersionInfoSize(path, nil)
+	if err != nil || size == 0 {
+		return ""
+	}
+	data := make([]byte, size)
+	if err := windows.GetFileVersionInfo(path, 0, size, unsafe.Pointer(&data[0])); err != nil {
+		return ""
+	}
+	// Try the file's own language/code page first, then common defaults.
+	var langs []string
+	var tp unsafe.Pointer
+	var tl uint32
+	if windows.VerQueryValue(unsafe.Pointer(&data[0]), `\VarFileInfo\Translation`, unsafe.Pointer(&tp), &tl) == nil && tl >= 4 {
+		t := unsafe.Slice((*uint16)(tp), tl/2)
+		for i := 0; i+1 < len(t); i += 2 {
+			langs = append(langs, fmt.Sprintf("%04x%04x", t[i], t[i+1]))
 		}
-		return procs[i].MemoryBytes > procs[j].MemoryBytes
-	})
-	if len(procs) > 10 {
-		procs = procs[:10]
 	}
-	return procs, total
+	langs = append(langs, "040904b0", "040904e4", "000004b0")
+	for _, l := range langs {
+		var p unsafe.Pointer
+		var n uint32
+		if windows.VerQueryValue(unsafe.Pointer(&data[0]), `\StringFileInfo\`+l+`\FileDescription`, unsafe.Pointer(&p), &n) == nil && n > 1 {
+			if s := strings.TrimSpace(windows.UTF16PtrToString((*uint16)(p))); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 func getOSVersion() string {

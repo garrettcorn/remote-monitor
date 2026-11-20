@@ -8,7 +8,7 @@
   <meta name="color-scheme" content="dark light">
   <title>PC Monitor — System Telemetry & Multi-Server Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="stylesheet" href="style.css?v=23">
 </head>
 <body>
 
@@ -330,22 +330,24 @@
       <section class="metric-card" data-section="processes">
         <div class="card-header">
           <div>
-            <div class="card-title">Top Active Processes</div>
-            <div class="sub-text">Ranked by memory and execution footprint</div>
+            <div class="card-title">Processes</div>
+            <div id="proc-summary" class="sub-text">Waiting for data…</div>
           </div>
+          <input id="proc-search" class="form-input proc-search" type="search" placeholder="Search apps or PID" aria-label="Search processes" autocomplete="off" spellcheck="false" disabled>
         </div>
         <div class="table-responsive">
-          <table class="proc-table">
+          <table id="process-table" class="proc-table">
             <thead>
               <tr>
-                <th style="width: 80px;">PID</th>
-                <th>Process Name</th>
-                <th style="width: 120px;">CPU %</th>
-                <th style="width: 140px;">Memory</th>
+                <th data-col="name" aria-sort="none"><button class="proc-sort" data-sort="name">App <span class="sort-arrow"></span></button></th>
+                <th data-col="cpu" class="num" aria-sort="none"><button class="proc-sort" data-sort="cpu">CPU <span class="sort-arrow"></span></button></th>
+                <th data-col="gpu" class="num hidden" aria-sort="none"><button class="proc-sort" data-sort="gpu" title="Busiest GPU engine (3D, video, copy…), like Task Manager">GPU <span class="sort-arrow"></span></button></th>
+                <th data-col="mem" class="num" aria-sort="none"><button class="proc-sort" data-sort="mem">Memory <span class="sort-arrow"></span></button></th>
+                <th data-col="io" class="num hidden" aria-sort="none"><button class="proc-sort" data-sort="io" title="Reads and writes to files, devices and the network, per second">I/O <span class="sort-arrow"></span></button></th>
               </tr>
             </thead>
             <tbody id="process-table-body">
-              <tr><td colspan="4" class="text-center sub-text">Polling process telemetry...</td></tr>
+              <tr><td colspan="4" class="text-center sub-text">Waiting for process data…</td></tr>
             </tbody>
           </table>
         </div>
@@ -561,6 +563,6 @@
   </div>
 
   <!-- Main JavaScript App -->
-  <script type="module" src="js/app.js?v=21"></script>
+  <script type="module" src="js/app.js?v=23"></script>
 </body>
 </html>

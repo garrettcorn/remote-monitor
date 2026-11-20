@@ -1,8 +1,8 @@
 // Dashboard customization (show/hide sections) and the Control Panel
 // button grid.
 
-import { UI } from './ui.js?v=21';
-import { MonitorClient } from './client.js?v=21';
+import { UI } from './ui.js?v=23';
+import { MonitorClient } from './client.js?v=23';
 
 const esc = UI.esc;
 
@@ -46,7 +46,7 @@ export const SECTION_GROUPS = [
     ['devices', 'Connected devices'],
     ['storage', 'Storage & partitions'],
     ['adapters', 'Network adapters'],
-    ['processes', 'Top processes'],
+    ['processes', 'Processes'],
   ] },
 ];
 

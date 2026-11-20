@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"pc_monitor/pkg/appicon"
 	"pc_monitor/pkg/audio"
 	"pc_monitor/pkg/control"
 	"pc_monitor/pkg/deck"
 	"pc_monitor/pkg/display"
 	"pc_monitor/pkg/power"
+	"pc_monitor/pkg/procctl"
 	"pc_monitor/pkg/telemetry"
 	"pc_monitor/pkg/update"
 )
@@ -52,11 +54,16 @@ type Server struct {
 	clients    map[*websocket.Conn]struct{}
 
 	// Overridable for tests.
-	doPower   func(power.Action) error
-	doDeck    func(deck.Action, string) error
-	capture   func(index, maxWidth int) ([]byte, error)
-	doPointer func(index int, e display.PointerEvent) error
-	listApps  func() ([]deck.App, error)
+	doPower    func(power.Action) error
+	doDeck     func(deck.Action, string) error
+	capture    func(index, maxWidth int) ([]byte, error)
+	doPointer  func(index int, e display.PointerEvent) error
+	listApps   func() ([]deck.App, error)
+	doEnd      func(pid int, want, current string) error
+	procName   func(pid int) string
+	procDetail func(pid int) (telemetry.ProcessDetail, error)
+	appPath    func(name string) string
+	appIcon    func(path string) ([]byte, error)
 }
 
 // NewServer creates a new API server.
@@ -76,6 +83,11 @@ func NewServer(serverName, token string, collector *telemetry.Collector, opts Op
 		doDeck:     deck.Press,
 		capture:    display.Capture,
 		doPointer:  display.Pointer,
+		doEnd:      procctl.End,
+		procName:   collector.ProcessName,
+		procDetail: collector.ProcessDetails,
+		appPath:    collector.AppPath,
+		appIcon:    appicon.PNG,
 		listApps:   deck.ListApps,
 	}
 }
@@ -112,6 +124,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/deck/press", s.requireControl(s.handleDeckPress))
 	mux.HandleFunc("/api/display/screenshot", s.requireControlMethod(http.MethodGet, s.handleScreenshot))
 	mux.HandleFunc("/api/display/input", s.requireControl(s.handleDisplayInput))
+	mux.HandleFunc("/api/processes", s.requireAccess(s.handleProcesses))
+	mux.HandleFunc("/api/processes/end", s.requireControl(s.handleProcessEnd))
+	mux.HandleFunc("/api/processes/detail", s.requireAccess(s.handleProcessDetail))
+	mux.HandleFunc("/api/processes/icon", s.requireAccess(s.handleProcessIcon))
 	mux.HandleFunc("/api/update", s.requireControl(s.handleUpdate))
 
 	return s.corsMiddleware(mux)
@@ -232,6 +248,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"pin_required":    s.controlEnabled(),
 		"screen_capture":  s.screenCaptureEnabled(),
 		"remote_input":    s.remoteInputEnabled(),
+		"process_list":    true,               // GET /api/processes exists (1.7.4+)
+		"process_end":     s.controlEnabled(), // End task allowed
+		"process_icons":   appicon.Supported(),
 		"version":         s.opts.Version,
 		"update":          s.updateStatus(),
 	})
@@ -456,6 +475,96 @@ func (s *Server) handleScreenshot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(img)
+}
+
+// handleProcesses returns every app with all of its processes (the
+// snapshot only carries the busiest few), for search and "Show all".
+func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "use GET")
+		return
+	}
+	apps, total := s.collector.AllApps()
+	if apps == nil {
+		apps = []telemetry.AppGroup{}
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"apps": apps, "total": total, "app_count": len(apps)})
+}
+
+// handleProcessDetail returns one process's details (?pid=N).
+func (s *Server) handleProcessDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "use GET")
+		return
+	}
+	pid, err := strconv.Atoi(r.URL.Query().Get("pid"))
+	if err != nil || pid <= 0 {
+		errorJSON(w, http.StatusBadRequest, "bad_request", "pid is required")
+		return
+	}
+	d, err := s.procDetail(pid)
+	if err != nil {
+		errorJSON(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, d)
+}
+
+// handleProcessIcon returns a running app's icon (?name=brave.exe) as PNG.
+// Only programs currently running are looked up, so it can't be used to
+// read arbitrary files.
+func (s *Server) handleProcessIcon(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "use GET")
+		return
+	}
+	path := s.appPath(r.URL.Query().Get("name"))
+	img, err := s.appIcon(path)
+	if path == "" || err != nil {
+		w.WriteHeader(http.StatusNoContent) // no icon: the dashboard shows a letter badge
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	_, _ = w.Write(img)
+}
+
+const maxEndPIDs = 256
+
+// handleProcessEnd ends processes ("End task"): {name, pids}. Each PID must
+// still belong to name; protected system processes are refused.
+func (s *Server) handleProcessEnd(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name string `json:"name"`
+		PIDs []int  `json:"pids"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	if body.Name == "" || len(body.PIDs) == 0 || len(body.PIDs) > maxEndPIDs {
+		errorJSON(w, http.StatusBadRequest, "bad_request", "name and 1-256 pids are required")
+		return
+	}
+	type failure struct {
+		PID   int    `json:"pid"`
+		Error string `json:"error"`
+	}
+	ended := 0
+	var failed []failure
+	for _, pid := range body.PIDs {
+		if err := s.doEnd(pid, body.Name, s.procName(pid)); err != nil {
+			failed = append(failed, failure{pid, err.Error()})
+			continue
+		}
+		ended++
+	}
+	if ended == 0 {
+		errorJSON(w, http.StatusConflict, "end_failed", failed[0].Error)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ended": ended, "failed": failed})
 }
 
 // displayInput is one remote-control event from the screen viewer: a

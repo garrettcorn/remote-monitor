@@ -341,3 +341,110 @@ func TestDisplayInputEndpoint(t *testing.T) {
 		t.Fatalf("input on read-only: %d", w.Code)
 	}
 }
+
+func TestProcessEndpoints(t *testing.T) {
+	collector := telemetry.NewCollector(500 * time.Millisecond)
+	pin, _ := control.NewPIN(nil)
+	srv := NewServer("test-server", "secret-token", collector, Options{PIN: pin})
+	var ended []int
+	// Never end real processes in tests.
+	srv.doEnd = func(pid int, want, current string) error {
+		if current == "" {
+			return fmt.Errorf("process %d is no longer running", pid)
+		}
+		ended = append(ended, pid)
+		return nil
+	}
+	srv.procName = func(pid int) string {
+		if pid == 100 {
+			return "notepad.exe"
+		}
+		return ""
+	}
+	h := srv.Handler()
+	w := do(t, h, "POST", "/api/pair", `{"pin":"`+pin.Current()+`"}`, map[string]string{"X-Pairing-Token": "secret-token"})
+	var pair struct {
+		Session string `json:"session"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &pair)
+	auth := map[string]string{"X-Pairing-Token": "secret-token", "X-Session": pair.Session}
+
+	if w := do(t, h, "GET", "/api/processes", "", auth); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"apps":[`) {
+		t.Fatalf("list: %d %s", w.Code, w.Body.String())
+	}
+	if w := do(t, h, "GET", "/api/health", "", nil); !strings.Contains(w.Body.String(), `"process_end":true`) {
+		t.Fatalf("health: %s", w.Body.String())
+	}
+	// Needs a PIN session.
+	if w := do(t, h, "POST", "/api/processes/end", `{"name":"notepad.exe","pids":[100]}`, map[string]string{"X-Pairing-Token": "secret-token"}); w.Code != http.StatusUnauthorized || len(ended) != 0 {
+		t.Fatalf("end without session: %d", w.Code)
+	}
+	for _, bad := range []string{`{"pids":[100]}`, `{"name":"x","pids":[]}`} {
+		if w := do(t, h, "POST", "/api/processes/end", bad, auth); w.Code != http.StatusBadRequest {
+			t.Fatalf("%s: %d", bad, w.Code)
+		}
+	}
+	w = do(t, h, "POST", "/api/processes/end", `{"name":"notepad.exe","pids":[100,101]}`, auth)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"ended":1`) || !strings.Contains(w.Body.String(), `"pid":101`) || fmt.Sprint(ended) != "[100]" {
+		t.Fatalf("partial end: %d %s %v", w.Code, w.Body.String(), ended)
+	}
+	if w := do(t, h, "POST", "/api/processes/end", `{"name":"x.exe","pids":[101]}`, auth); w.Code != http.StatusConflict {
+		t.Fatalf("all failed: %d", w.Code)
+	}
+	// Read-only servers list processes but never end them.
+	ro := NewServer("ro", "secret-token", collector, Options{ReadOnly: true})
+	if w := do(t, ro.Handler(), "GET", "/api/processes?token=secret-token", "", nil); w.Code != http.StatusOK {
+		t.Fatalf("read-only list: %d", w.Code)
+	}
+	if w := do(t, ro.Handler(), "POST", "/api/processes/end?token=secret-token", `{"name":"notepad.exe","pids":[100]}`, nil); w.Code != http.StatusForbidden {
+		t.Fatalf("read-only end: %d", w.Code)
+	}
+}
+
+func TestProcessDetailEndpoint(t *testing.T) {
+	collector := telemetry.NewCollector(500 * time.Millisecond)
+	srv := NewServer("ro", "secret-token", collector, Options{ReadOnly: true})
+	srv.procDetail = func(pid int) (telemetry.ProcessDetail, error) {
+		if pid == 42 {
+			return telemetry.ProcessDetail{PID: 42, Name: "app.exe", Path: `C:\app.exe`}, nil
+		}
+		return telemetry.ProcessDetail{}, fmt.Errorf("process %d is not running", pid)
+	}
+	h := srv.Handler()
+	if w := do(t, h, "GET", "/api/processes/detail?pid=42&token=secret-token", "", nil); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"path":"C:\\app.exe"`) || strings.Contains(w.Body.String(), `"started"`) {
+		t.Fatalf("detail: %d %s", w.Code, w.Body.String())
+	}
+	if w := do(t, h, "GET", "/api/processes/detail?pid=7&token=secret-token", "", nil); w.Code != http.StatusNotFound {
+		t.Fatalf("missing: %d", w.Code)
+	}
+	if w := do(t, h, "GET", "/api/processes/detail?pid=x&token=secret-token", "", nil); w.Code != http.StatusBadRequest {
+		t.Fatalf("bad pid: %d", w.Code)
+	}
+	if w := do(t, h, "GET", "/api/processes/detail?pid=42", "", nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", w.Code)
+	}
+}
+
+func TestProcessIconEndpoint(t *testing.T) {
+	collector := telemetry.NewCollector(500 * time.Millisecond)
+	srv := NewServer("ro", "secret-token", collector, Options{ReadOnly: true})
+	srv.appPath = func(name string) string {
+		if strings.EqualFold(name, "app.exe") {
+			return "C:/app.exe"
+		}
+		return ""
+	}
+	srv.appIcon = func(path string) ([]byte, error) { return []byte("PNGDATA"), nil }
+	h := srv.Handler()
+	w := do(t, h, "GET", "/api/processes/icon?name=App.exe&token=secret-token", "", nil)
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/png" || w.Body.String() != "PNGDATA" {
+		t.Fatalf("icon: %d %v %q", w.Code, w.Header(), w.Body.String())
+	}
+	// Not running: never looked up, whatever the name.
+	if w := do(t, h, "GET", "/api/processes/icon?name=..%2F..%2Fsecret&token=secret-token", "", nil); w.Code != http.StatusNoContent || w.Body.Len() != 0 {
+		t.Fatalf("unknown app: %d", w.Code)
+	}
+	if w := do(t, h, "GET", "/api/processes/icon?name=app.exe", "", nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", w.Code)
+	}
+}
