@@ -1,0 +1,9 @@
+#!/bin/sh
+# AppImage entry point. Double-clicking the AppImage (no arguments) shows the
+# tray icon and starts the background server; any arguments are passed
+# through to the CLI, e.g. `./pc_monitor-1.6.0-x86_64.AppImage status`.
+HERE="$(dirname "$(readlink -f "$0")")"
+if [ "$#" -eq 0 ]; then
+  set -- tray
+fi
+exec "$HERE/usr/bin/pc_monitor" "$@"

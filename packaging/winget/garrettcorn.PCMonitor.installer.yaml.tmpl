@@ -1,0 +1,19 @@
+# winget installer manifest (rendered by scripts/render_packages.sh; not submitted automatically).
+PackageIdentifier: garrettcorn.PCMonitor
+PackageVersion: {{VERSION}}
+InstallerType: inno
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+UpgradeBehavior: install
+ReleaseDate: {{DATE}}
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/garrettcorn/remote-monitor/releases/download/v{{VERSION}}/pc_monitor_{{VERSION}}_windows_amd64_setup.exe
+    InstallerSha256: {{SHA_SETUP_AMD64_UPPER}}
+  - Architecture: arm64
+    InstallerUrl: https://github.com/garrettcorn/remote-monitor/releases/download/v{{VERSION}}/pc_monitor_{{VERSION}}_windows_arm64_setup.exe
+    InstallerSha256: {{SHA_SETUP_ARM64_UPPER}}
+ManifestType: installer
+ManifestVersion: 1.6.0

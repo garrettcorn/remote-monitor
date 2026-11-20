@@ -1,0 +1,40 @@
+{
+    "version": "{{VERSION}}",
+    "description": "Monitor and control this computer from the PC Monitor dashboard",
+    "homepage": "https://github.com/garrettcorn/remote-monitor",
+    "license": "GPL-3.0-only",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/garrettcorn/remote-monitor/releases/download/v{{VERSION}}/pc_monitor_{{VERSION}}_windows_amd64.zip",
+            "hash": "{{SHA_WINDOWS_AMD64}}"
+        },
+        "arm64": {
+            "url": "https://github.com/garrettcorn/remote-monitor/releases/download/v{{VERSION}}/pc_monitor_{{VERSION}}_windows_arm64.zip",
+            "hash": "{{SHA_WINDOWS_ARM64}}"
+        }
+    },
+    "bin": "pc_monitor.exe",
+    "shortcuts": [
+        ["pc_monitor-app.exe", "PC Monitor"],
+        ["pc_monitor-app.exe", "PC Monitor Settings", "settings"]
+    ],
+    "notes": [
+        "Start PC Monitor from the Start menu (tray icon), or run: pc_monitor start",
+        "Pairing QR code and PIN: pc_monitor settings",
+        "Start at login: pc_monitor autostart on"
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/garrettcorn/remote-monitor/releases/download/v$version/pc_monitor_$version_windows_amd64.zip"
+            },
+            "arm64": {
+                "url": "https://github.com/garrettcorn/remote-monitor/releases/download/v$version/pc_monitor_$version_windows_arm64.zip"
+            }
+        },
+        "hash": {
+            "url": "$baseurl/checksums.txt"
+        }
+    }
+}

@@ -170,23 +170,46 @@ func InstallMethod() (method, note string) {
 	case strings.Contains(p, "/scoop/apps/"):
 		return MethodManaged, "Installed with Scoop. Run: scoop update pc-monitor"
 	case runtime.GOOS == "linux" && (strings.HasPrefix(p, "/usr/bin/") || strings.HasPrefix(p, "/usr/lib/")):
-		return MethodManaged, "Installed with a system package. Update it with your package manager"
+		return MethodManaged, "Installed from a .deb/.rpm package. Download the new package from the release page"
 	}
 	return MethodSelf, ""
 }
 
-// assetNames returns (download asset, binary inside the archive or "" for a
-// direct file) for this platform and install method.
-func assetNames(version, method string) (asset, inner string) {
+// assetName is the release file to download for this platform and method.
+func assetName(version, method string) string {
 	if method == MethodAppImage {
 		arch := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[runtime.GOARCH]
-		return fmt.Sprintf("pc_monitor-%s-%s.AppImage", version, arch), ""
+		return fmt.Sprintf("pc_monitor-%s-%s.AppImage", version, arch)
 	}
-	bin := fmt.Sprintf("pc_monitor_%s_%s", runtime.GOOS, runtime.GOARCH)
 	if runtime.GOOS == "windows" {
-		return fmt.Sprintf("pc_monitor_%s_%s_%s.zip", version, runtime.GOOS, runtime.GOARCH), bin + ".exe"
+		return fmt.Sprintf("pc_monitor_%s_%s_%s.zip", version, runtime.GOOS, runtime.GOARCH)
 	}
-	return fmt.Sprintf("pc_monitor_%s_%s_%s.tar.gz", version, runtime.GOOS, runtime.GOARCH), bin
+	return fmt.Sprintf("pc_monitor_%s_%s_%s.tar.gz", version, runtime.GOOS, runtime.GOARCH)
+}
+
+// replacement maps a file inside the archive to the installed file it replaces.
+type replacement struct{ inner, target string }
+
+// replacements works out which installed files to update. On Windows the
+// console program (pc_monitor.exe) and the windowless tray app
+// (pc_monitor-app.exe) sit side by side and the server may be running as
+// either, so both are updated when present.
+func replacements(exe string) []replacement {
+	if runtime.GOOS != "windows" {
+		return []replacement{{"pc_monitor", exe}}
+	}
+	dir := filepath.Dir(exe)
+	console, app := exe, filepath.Join(dir, "pc_monitor-app.exe")
+	if strings.EqualFold(filepath.Base(exe), "pc_monitor-app.exe") {
+		console, app = filepath.Join(dir, "pc_monitor.exe"), exe
+	}
+	var out []replacement
+	for _, r := range []replacement{{"pc_monitor.exe", console}, {"pc_monitor-app.exe", app}} {
+		if _, err := os.Stat(r.target); err == nil {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // Apply downloads, verifies and installs the latest release. The caller
@@ -216,7 +239,7 @@ func (c *Checker) Apply(ctx context.Context) error {
 	for _, a := range rel.Assets {
 		assetURL[a.Name] = a.URL
 	}
-	asset, inner := assetNames(st.Latest, st.Method)
+	asset := assetName(st.Latest, st.Method)
 	if assetURL[asset] == "" {
 		return fmt.Errorf("release %s has no %s", rel.TagName, asset)
 	}
@@ -248,20 +271,28 @@ func (c *Checker) Apply(ctx context.Context) error {
 		return fmt.Errorf("checksum mismatch for %s", asset)
 	}
 
-	bin := data
-	if inner != "" {
-		if bin, err = extract(data, asset, inner); err != nil {
+	if st.Method == MethodAppImage {
+		return replaceFile(os.Getenv("APPIMAGE"), data)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	exe, _ = filepath.EvalSymlinks(exe)
+	// Extract everything first so a bad archive changes nothing.
+	reps := replacements(exe)
+	bins := make([][]byte, len(reps))
+	for i, r := range reps {
+		if bins[i], err = extract(data, asset, r.inner); err != nil {
 			return err
 		}
 	}
-	target := os.Getenv("APPIMAGE")
-	if st.Method != MethodAppImage {
-		if target, err = os.Executable(); err != nil {
+	for i, r := range reps {
+		if err := replaceFile(r.target, bins[i]); err != nil {
 			return err
 		}
-		target, _ = filepath.EvalSymlinks(target)
 	}
-	return replaceFile(target, bin)
+	return nil
 }
 
 // VerifySignature checks checksums.txt against its base64 signature.
@@ -383,9 +414,11 @@ func replaceFile(target string, data []byte) error {
 	return os.Rename(tmpName, target)
 }
 
-// CleanupOld removes a leftover <exe>.old from a previous Windows update.
+// CleanupOld removes leftover <exe>.old files from a previous Windows update.
 func CleanupOld() {
 	if exe, err := os.Executable(); err == nil {
 		_ = os.Remove(exe + ".old")
+		_ = os.Remove(filepath.Join(filepath.Dir(exe), "pc_monitor.exe.old"))
+		_ = os.Remove(filepath.Join(filepath.Dir(exe), "pc_monitor-app.exe.old"))
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"fyne.io/systray"
 
 	"pc_monitor/pkg/buildinfo"
+	"pc_monitor/pkg/icon"
 	"pc_monitor/pkg/service"
 )
 
@@ -31,9 +32,9 @@ func trayCommand() error {
 
 func trayReady(port int) {
 	if runtime.GOOS == "windows" {
-		systray.SetIcon(trayIconICO(32))
+		systray.SetIcon(icon.ICO(32))
 	} else {
-		systray.SetTemplateIcon(trayIconPNG(44), trayIconPNG(44))
+		systray.SetTemplateIcon(icon.PNG(44), icon.PNG(44))
 	}
 	systray.SetTitle("")
 	systray.SetTooltip("PC Monitor")

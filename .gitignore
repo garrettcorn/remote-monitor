@@ -11,3 +11,4 @@ pairing_card.html
 # Logs & temp
 *.log
 *.tmp
+packaging/windows/pc-monitor.ico

@@ -1,0 +1,55 @@
+# Homebrew formula for PC Monitor (rendered by scripts/render_packages.sh).
+# Install:  brew install garrettcorn/tap/pc-monitor
+# Start at login (LaunchAgent in your session):  brew services start pc-monitor
+class PcMonitor < Formula
+  desc "Monitor and control this computer from the PC Monitor dashboard"
+  homepage "https://github.com/garrettcorn/remote-monitor"
+  version "{{VERSION}}"
+  license "GPL-3.0-only"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/garrettcorn/remote-monitor/releases/download/v{{VERSION}}/pc_monitor_{{VERSION}}_darwin_arm64.tar.gz"
+      sha256 "{{SHA_DARWIN_ARM64}}"
+    end
+    on_intel do
+      url "https://github.com/garrettcorn/remote-monitor/releases/download/v{{VERSION}}/pc_monitor_{{VERSION}}_darwin_amd64.tar.gz"
+      sha256 "{{SHA_DARWIN_AMD64}}"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/garrettcorn/remote-monitor/releases/download/v{{VERSION}}/pc_monitor_{{VERSION}}_linux_arm64.tar.gz"
+      sha256 "{{SHA_LINUX_ARM64}}"
+    end
+    on_intel do
+      url "https://github.com/garrettcorn/remote-monitor/releases/download/v{{VERSION}}/pc_monitor_{{VERSION}}_linux_amd64.tar.gz"
+      sha256 "{{SHA_LINUX_AMD64}}"
+    end
+  end
+
+  def install
+    bin.install "pc_monitor"
+  end
+
+  service do
+    run [opt_bin/"pc_monitor", "run", "--background"]
+    run_type :immediate
+    keep_alive false
+  end
+
+  def caveats
+    <<~EOS
+      Start PC Monitor now and at every login:
+        brew services start pc-monitor
+      Then open the settings page (pairing QR code and PIN):
+        pc_monitor settings
+      Update with: brew upgrade pc-monitor
+    EOS
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/pc_monitor version")
+  end
+end

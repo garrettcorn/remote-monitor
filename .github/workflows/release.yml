@@ -1,5 +1,10 @@
 name: Release
 
+# Builds every package on free GitHub-hosted runners, signs checksums.txt
+# with the UPDATE_SIGNING_KEY secret (verified by the built-in self-updater)
+# and publishes the GitHub Release. If a PACKAGES_TOKEN secret is set, the
+# Homebrew tap and Scoop bucket are updated too.
+
 on:
   push:
     tags:
@@ -7,9 +12,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release version tag (e.g. v1.0.0)'
+        description: 'Release version tag (e.g. v1.6.0)'
         required: true
-        default: 'v1.0.0'
       draft:
         description: 'Publish as draft'
         type: boolean
@@ -18,90 +22,269 @@ on:
         description: 'Mark as pre-release'
         type: boolean
         default: false
+      dry_run:
+        description: 'Build, package and sign everything from this branch without publishing'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+env:
+  GO_VERSION: '1.27'
+
 jobs:
-  publish-release:
-    name: Build & Publish Release
+  prepare:
+    name: Prepare
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      version: ${{ steps.vars.outputs.version }}
+      ref: ${{ steps.vars.outputs.ref }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Determine Tag Version
-        id: vars
+      - uses: actions/checkout@v4
+      - id: vars
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-          VERSION="${TAG#v}"
-          echo "RELEASE_TAG=${TAG}" >> $GITHUB_ENV
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          echo "Resolved tag: ${TAG}, version: ${VERSION}"
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then TAG="${{ github.event.inputs.tag }}"; else TAG="${GITHUB_REF#refs/tags/}"; fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then echo "ref=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"; else echo "ref=${TAG}" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.27'
+          go-version: ${{ env.GO_VERSION }}
           check-latest: true
-
-      - name: Validate CHANGELOG.md
+      - name: Validate CHANGELOG.md and extract release notes
         run: |
           go run ./cmd/changelog validate
-
-      - name: Extract Release Notes
-        run: |
-          go run ./cmd/changelog extract -o release_notes.md "${VERSION}"
-          echo "=== RELEASE NOTES ==="
+          go run ./cmd/changelog extract -o release_notes.md "${{ steps.vars.outputs.version }}" || { [ "${{ github.event.inputs.dry_run }}" = "true" ] && echo "Dry run" > release_notes.md; }
           cat release_notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: release_notes.md
 
-      - name: Cross-Compile Binaries
+  build:
+    name: Windows + Linux binaries, deb/rpm, AppImage (x86_64)
+    needs: prepare
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - name: Install packaging tools
+        run: sudo apt-get update && sudo apt-get install -y rpm zsync zip
+      - name: Build binaries
         run: |
-          mkdir -p build
-          # Windows
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o build/pc_monitor_windows_amd64.exe ./cmd/server
-          GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o build/pc_monitor_windows_arm64.exe ./cmd/server
-          # Linux
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o build/pc_monitor_linux_amd64 ./cmd/server
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o build/pc_monitor_linux_arm64 ./cmd/server
-          # macOS
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o build/pc_monitor_darwin_arm64 ./cmd/server
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o build/pc_monitor_darwin_amd64 ./cmd/server
-
-      - name: Package Archives & Generate Checksums
+          LDFLAGS="-s -w -X pc_monitor/pkg/buildinfo.Version=${VERSION}"
+          for arch in amd64 arm64; do
+            mkdir -p build/windows_$arch build/linux_$arch
+            GOOS=windows GOARCH=$arch go build -ldflags="$LDFLAGS" -o build/windows_$arch/pc_monitor.exe ./cmd/server
+            GOOS=windows GOARCH=$arch go build -ldflags="$LDFLAGS -H windowsgui -X main.guiBuild=1" -o build/windows_$arch/pc_monitor-app.exe ./cmd/server
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -ldflags="$LDFLAGS" -o build/linux_$arch/pc_monitor ./cmd/server
+          done
+      - name: Package archives and Linux packages
         run: |
-          mkdir -p dist_release
-          cd build
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            cp README.md CHANGELOG.md build/windows_$arch/
+            (cd build/windows_$arch && zip -9 "../../dist/pc_monitor_${VERSION}_windows_${arch}.zip" pc_monitor.exe pc_monitor-app.exe README.md CHANGELOG.md)
+            cp README.md CHANGELOG.md build/linux_$arch/
+            tar -C build/linux_$arch -czf "dist/pc_monitor_${VERSION}_linux_${arch}.tar.gz" pc_monitor README.md CHANGELOG.md
+            bash scripts/package_linux.sh "$VERSION" "$arch" "build/linux_$arch/pc_monitor" dist deb rpm
+          done
+          bash scripts/package_linux.sh "$VERSION" amd64 build/linux_amd64/pc_monitor dist appimage
+      - name: Smoke test
+        run: |
+          ./build/linux_amd64/pc_monitor version | grep -q "$VERSION"
+          chmod +x dist/*.AppImage
+          ./dist/pc_monitor-${VERSION}-x86_64.AppImage --appimage-extract-and-run version | grep -q "$VERSION"
+          dpkg-deb --info dist/pc-monitor_${VERSION}_amd64.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-build
+          path: dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-binaries
+          path: build/windows_*/*.exe
 
-          # Windows ZIPs
-          zip "../dist_release/pc_monitor_${VERSION}_windows_amd64.zip" pc_monitor_windows_amd64.exe ../README.md ../CHANGELOG.md
-          zip "../dist_release/pc_monitor_${VERSION}_windows_arm64.zip" pc_monitor_windows_arm64.exe ../README.md ../CHANGELOG.md
+  appimage-arm:
+    name: AppImage (aarch64)
+    needs: prepare
+    runs-on: ubuntu-24.04-arm
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - run: sudo apt-get update && sudo apt-get install -y zsync
+      - name: Build AppImage
+        run: |
+          mkdir -p build dist
+          CGO_ENABLED=0 go build -ldflags="-s -w -X pc_monitor/pkg/buildinfo.Version=${VERSION}" -o build/pc_monitor ./cmd/server
+          bash scripts/package_linux.sh "$VERSION" arm64 build/pc_monitor dist appimage
+          ./dist/pc_monitor-${VERSION}-aarch64.AppImage --appimage-extract-and-run version | grep -q "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-appimage-arm
+          path: dist/*
 
-          # Linux Tarballs
-          tar -czvf "../dist_release/pc_monitor_${VERSION}_linux_amd64.tar.gz" pc_monitor_linux_amd64 ../README.md ../CHANGELOG.md
-          tar -czvf "../dist_release/pc_monitor_${VERSION}_linux_arm64.tar.gz" pc_monitor_linux_arm64 ../README.md ../CHANGELOG.md
+  macos:
+    name: macOS binaries (with menu-bar app)
+    needs: prepare
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - name: Build (cgo for the menu-bar icon)
+        run: |
+          mkdir -p dist
+          LDFLAGS="-s -w -X pc_monitor/pkg/buildinfo.Version=${VERSION}"
+          for arch in arm64 amd64; do
+            mkdir -p build/$arch
+            if [ "$arch" = amd64 ]; then export CC="clang -arch x86_64"; else export CC="clang -arch arm64"; fi
+            CGO_ENABLED=1 GOOS=darwin GOARCH=$arch go build -ldflags="$LDFLAGS" -o build/$arch/pc_monitor ./cmd/server
+            cp README.md CHANGELOG.md build/$arch/
+            tar -C build/$arch -czf "dist/pc_monitor_${VERSION}_darwin_${arch}.tar.gz" pc_monitor README.md CHANGELOG.md
+          done
+          ./build/arm64/pc_monitor version | grep -q "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos
+          path: dist/*
 
-          # macOS Tarballs
-          tar -czvf "../dist_release/pc_monitor_${VERSION}_darwin_arm64.tar.gz" pc_monitor_darwin_arm64 ../README.md ../CHANGELOG.md
-          tar -czvf "../dist_release/pc_monitor_${VERSION}_darwin_amd64.tar.gz" pc_monitor_darwin_amd64 ../README.md ../CHANGELOG.md
+  windows-installer:
+    name: Windows installers
+    needs: [prepare, build]
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-binaries
+          path: build
+      - name: Build installers
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          go run ./cmd/pkgtool icon-ico packaging/windows/pc-monitor.ico
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          foreach ($arch in "amd64", "arm64") {
+            $env:ARCH = $arch
+            $env:BINDIR = (Resolve-Path "build/windows_$arch").Path
+            $env:OUTDIR = (Resolve-Path dist).Path
+            & $iscc packaging\windows\installer.iss
+            if ($LASTEXITCODE -ne 0) { throw "ISCC failed for $arch" }
+          }
+          & "build/windows_amd64/pc_monitor.exe" version
+          Get-ChildItem dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows-installer
+          path: dist/*
 
-          cd ../dist_release
+  publish:
+    name: Sign and publish
+    needs: [prepare, build, appimage-arm, macos, windows-installer]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+      - name: Checksums and signature
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then
+            echo "::error::UPDATE_SIGNING_KEY secret is missing; the self-updater only installs signed releases."
+            exit 1
+          fi
+          cd dist
           sha256sum * > checksums.txt
-          echo "=== CHECKSUMS ==="
           cat checksums.txt
-
+          go run ../cmd/signtool sign checksums.txt
+          go run ../cmd/signtool verify checksums.txt "$(grep -o 'PublicKey = "[^"]*"' ../pkg/update/update.go | cut -d'"' -f2)"
+      - name: Render Homebrew, Scoop and winget manifests
+        run: |
+          bash scripts/render_packages.sh "$VERSION" dist packages
+          (cd packages/winget && zip -r "../../dist/winget_manifests_${VERSION}.zip" manifests)
+      - name: Upload dry-run output
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-release
+          path: |
+            dist/*
+            packages/**
       - name: Create GitHub Release
+        if: ${{ github.event.inputs.dry_run != 'true' }}
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: Release ${{ env.RELEASE_TAG }}
+          tag_name: ${{ env.TAG }}
+          name: Release ${{ env.TAG }}
           body_path: release_notes.md
           draft: ${{ github.event.inputs.draft || false }}
-          prerelease: ${{ github.event.inputs.prerelease || false }}
-          files: dist_release/*
+          prerelease: ${{ github.event.inputs.prerelease || contains(env.TAG, '-') }}
+          files: dist/*
+      - name: Update Homebrew tap and Scoop bucket
+        if: ${{ github.event.inputs.dry_run != 'true' && !contains(env.TAG, '-') }}
+        env:
+          PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: |
+          if [ -z "$PACKAGES_TOKEN" ]; then
+            echo "::notice::PACKAGES_TOKEN not set; skipping tap/bucket update (see README > Releases)."
+            exit 0
+          fi
+          git config --global user.name "pc-monitor-release"
+          git config --global user.email "release@users.noreply.github.com"
+          for repo in homebrew-tap scoop-bucket; do
+            git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/garrettcorn/${repo}.git" "$repo"
+          done
+          mkdir -p homebrew-tap/Formula scoop-bucket/bucket
+          cp packages/homebrew/pc-monitor.rb homebrew-tap/Formula/pc-monitor.rb
+          cp packages/scoop/pc-monitor.json scoop-bucket/bucket/pc-monitor.json
+          for repo in homebrew-tap scoop-bucket; do
+            (cd "$repo" && git add -A && (git diff --cached --quiet || git commit -m "pc-monitor ${VERSION}") && git push)
+          done

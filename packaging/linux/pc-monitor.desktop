@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=PC Monitor
+GenericName=System Monitor Server
+Comment=Monitor and control this computer from the PC Monitor dashboard
+Exec=pc_monitor tray
+Icon=pc-monitor
+Terminal=false
+Categories=System;Monitor;
+Keywords=monitor;remote;telemetry;dashboard;

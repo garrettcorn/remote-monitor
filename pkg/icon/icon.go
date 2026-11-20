@@ -1,4 +1,5 @@
-package main
+// Package icon draws the PC Monitor icon in code (tray, installer, AppImage).
+package icon
 
 import (
 	"bytes"
@@ -8,9 +9,9 @@ import (
 	"image/png"
 )
 
-// trayIconPNG draws the tray icon: a blue rounded square with a white
+// PNG draws the icon: a blue rounded square with a white
 // heartbeat line (no image files to ship).
-func trayIconPNG(size int) []byte {
+func PNG(size int) []byte {
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 	blue := color.RGBA{10, 132, 255, 255}
 	white := color.RGBA{255, 255, 255, 255}
@@ -62,18 +63,31 @@ func trayIconPNG(size int) []byte {
 	return buf.Bytes()
 }
 
-// trayIconICO wraps a PNG in an ICO container (supported since Windows Vista).
-func trayIconICO(size int) []byte {
-	p := trayIconPNG(size)
-	var buf bytes.Buffer
-	_ = binary.Write(&buf, binary.LittleEndian, []uint16{0, 1, 1}) // reserved, type=icon, count
-	dim := byte(size)
-	if size >= 256 {
-		dim = 0
+// ICO builds a Windows .ico with one PNG-compressed image per size
+// (PNG entries are supported since Windows Vista).
+func ICO(sizes ...int) []byte {
+	if len(sizes) == 0 {
+		sizes = []int{16, 32, 48, 256}
 	}
-	buf.Write([]byte{dim, dim, 0, 0})                                         // width, height, colours, reserved
-	_ = binary.Write(&buf, binary.LittleEndian, []uint16{1, 32})              // planes, bpp
-	_ = binary.Write(&buf, binary.LittleEndian, []uint32{uint32(len(p)), 22}) // size, offset
-	buf.Write(p)
+	images := make([][]byte, len(sizes))
+	for i, s := range sizes {
+		images[i] = PNG(s)
+	}
+	var buf bytes.Buffer
+	_ = binary.Write(&buf, binary.LittleEndian, []uint16{0, 1, uint16(len(sizes))}) // reserved, type=icon, count
+	offset := uint32(6 + 16*len(sizes))
+	for i, s := range sizes {
+		dim := byte(s)
+		if s >= 256 {
+			dim = 0 // 0 means 256
+		}
+		buf.Write([]byte{dim, dim, 0, 0})                            // width, height, colours, reserved
+		_ = binary.Write(&buf, binary.LittleEndian, []uint16{1, 32}) // planes, bits per pixel
+		_ = binary.Write(&buf, binary.LittleEndian, []uint32{uint32(len(images[i])), offset})
+		offset += uint32(len(images[i]))
+	}
+	for _, img := range images {
+		buf.Write(img)
+	}
 	return buf.Bytes()
 }

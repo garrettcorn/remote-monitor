@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -76,5 +77,26 @@ func TestReplaceFile(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(target); string(b) != "new" {
 		t.Fatalf("target has %q", b)
+	}
+}
+
+func TestReplacements(t *testing.T) {
+	dir := t.TempDir()
+	console := filepath.Join(dir, "pc_monitor.exe")
+	app := filepath.Join(dir, "pc_monitor-app.exe")
+	os.WriteFile(console, []byte("c"), 0o755)
+	if runtime.GOOS != "windows" {
+		if r := replacements(console); len(r) != 1 || r[0].inner != "pc_monitor" {
+			t.Fatalf("unix: %+v", r)
+		}
+		return
+	}
+	if r := replacements(console); len(r) != 1 || r[0].target != console {
+		t.Fatalf("console only: %+v", r)
+	}
+	os.WriteFile(app, []byte("a"), 0o755)
+	r := replacements(app) // running as the tray app
+	if len(r) != 2 || r[0].target != console || r[1].target != app {
+		t.Fatalf("both: %+v", r)
 	}
 }
