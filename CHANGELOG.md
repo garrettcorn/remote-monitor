@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] - 2026-11-20
+
+### Changed
+- Check for updates every 6 hours instead of once a day ([`addee2c`](https://github.com/garrettcorn/remote-monitor/commit/addee2c))
+- Make `-no-screen` also turn off remote control ([`addee2c`](https://github.com/garrettcorn/remote-monitor/commit/addee2c))
+- Rename the remaining "Stream Deck" references to the Control Panel ([`addee2c`](https://github.com/garrettcorn/remote-monitor/commit/addee2c))
+
+### Added
+- Add remote control of the host's mouse and keyboard from the Displays viewer, with a live view (Windows; Linux X11 via `xdotool`) ([`addee2c`](https://github.com/garrettcorn/remote-monitor/commit/addee2c))
+- Add saving a full-resolution screen capture as a JPEG ([`addee2c`](https://github.com/garrettcorn/remote-monitor/commit/addee2c))
+- Add automatic updates, off by default: settings page, tray menu or `pc_monitor update --auto on` ([`addee2c`](https://github.com/garrettcorn/remote-monitor/commit/addee2c))
+- Add a Check for updates button to the dashboard; after updating, it waits for the server to come back on the new version ([`addee2c`](https://github.com/garrettcorn/remote-monitor/commit/addee2c))
+
 ## [1.6.0] - 2026-11-20
 
 ### Changed
@@ -139,6 +152,7 @@ All notable changes to this project will be documented in this file.
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
 
+[1.7.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.0
 [1.6.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.6.0
 
 [1.5.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.5.0

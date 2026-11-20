@@ -1,6 +1,6 @@
 # Agent Handoff: Remote Monitor
 
-> Last updated: 2026-11-19 (after release **v1.2.1**)  
+> Last updated: 2026-11-20 (release **v1.7.0**)  
 > Repo: https://github.com/garrettcorn/remote-monitor  
 > Pages: https://garrettcorn.github.io/remote-monitor/  
 > Local workspace: `c:\Users\jon\workspace\pc_monitor\`
@@ -113,6 +113,9 @@ No new third-party Go dependencies were added for audio/SMART/devices: Windows u
 | `v1.3.0` | Control Panel with buttons (`pkg/deck`, `/api/deck/*`), Customize dialog to show/hide sections |
 | `v1.3.1` | PIN auto-connect at 4 digits; SMART admin note only when the server is not elevated (`server_elevated`) |
 | `v1.4.0` | Displays section (list + screen preview with auto-refresh, `/api/display/screenshot`, `-no-screen`); old button-grid label removed from the Control Panel; README per-OS feature table |
+| `v1.5.0` | Button editor tabs (App, Shortcut, Media & system, Text, Website), installed-app picker, shortcut library, text snippets, Lock/Sleep, custom colour wheel |
+| `v1.6.0` | Saved config, management CLI, local settings page, start at login, signed self-update, tray app, installers/AppImage/deb/rpm/Homebrew/Scoop/winget packaging |
+| `v1.7.0` | Displays remote control (`/api/display/input`) and capture saving; automatic updates (`auto_update`, off by default) and dashboard Check for updates; "Stream Deck" wording removed |
 
 All released tags have 7 release assets.
 
