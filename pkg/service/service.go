@@ -40,6 +40,10 @@ func Executable() (path string, gui bool) {
 	return exe, false
 }
 
+// LoginArgs are the arguments used for start-at-login on Linux/macOS
+// ("start" for a plain background server, "tray" when the tray is built in).
+var LoginArgs = []string{"start"}
+
 // LogPath is where background runs write their output.
 func LogPath() string { return filepath.Join(config.Dir(), "server.log") }
 

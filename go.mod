@@ -11,6 +11,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	fyne.io/systray v1.11.1-0.20250812065214-4856ac3adc3c // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/creachadair/msync v0.8.1 // indirect

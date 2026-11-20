@@ -43,17 +43,17 @@ func AutostartEnable() error {
 <dict>
   <key>Label</key><string>%s</string>
   <key>ProgramArguments</key>
-  <array><string>%s</string><string>run</string><string>--background</string></array>
+  <array><string>%s</string>%s</array>
   <key>RunAtLoad</key><true/>
   <key>StandardOutPath</key><string>%s</string>
   <key>StandardErrorPath</key><string>%s</string>
 </dict>
 </plist>
-`, launchAgentLabel, html.EscapeString(exe), html.EscapeString(LogPath()), html.EscapeString(LogPath()))
+`, launchAgentLabel, html.EscapeString(exe), plistArgs(), html.EscapeString(LogPath()), html.EscapeString(LogPath()))
 	} else {
 		// Desktop Entry Exec quoting: wrap in quotes, escape \ " ` $.
 		q := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "`", "\\`", "$", `\$`).Replace(exe)
-		content = fmt.Sprintf("[Desktop Entry]\nType=Application\nName=PC Monitor\nComment=PC Monitor server\nExec=\"%s\" start\nX-GNOME-Autostart-enabled=true\nTerminal=false\n", q)
+		content = fmt.Sprintf("[Desktop Entry]\nType=Application\nName=PC Monitor\nComment=PC Monitor server\nExec=\"%s\" %s\nX-GNOME-Autostart-enabled=true\nTerminal=false\n", q, strings.Join(LoginArgs, " "))
 	}
 	if err := os.MkdirAll(filepath.Dir(autostartFile()), 0o755); err != nil {
 		return err
@@ -77,3 +77,11 @@ func AutostartEnabled() bool {
 
 // AutostartDescription says where the entry lives.
 func AutostartDescription() string { return autostartFile() }
+
+func plistArgs() string {
+	var b strings.Builder
+	for _, a := range LoginArgs {
+		b.WriteString("<string>" + html.EscapeString(a) + "</string>")
+	}
+	return b.String()
+}

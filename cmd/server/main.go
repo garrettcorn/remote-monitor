@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"pc_monitor/pkg/buildinfo"
+	"pc_monitor/pkg/service"
 )
 
 func main() {
@@ -23,10 +24,13 @@ func main() {
 	cmd := "run"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		cmd, args = args[0], args[1:]
-	} else if guiApp() {
-		// The windowless Windows app (pc_monitor-app.exe) runs the server
-		// in the background when launched without a command.
-		args = append([]string{"--background"}, args...)
+	} else if guiApp() && len(args) == 0 {
+		// The windowless Windows app (pc_monitor-app.exe) shows the tray
+		// icon, starting the background server if needed.
+		cmd = "tray"
+	}
+	if trayAvailable {
+		service.LoginArgs = []string{"tray"} // start-at-login shows the tray too
 	}
 
 	var err error
@@ -47,6 +51,8 @@ func main() {
 		err = settingsCommand()
 	case "pin":
 		err = pinCommand()
+	case "tray":
+		err = trayCommand()
 	case "config":
 		err = configCommand(args)
 	case "autostart":
@@ -78,6 +84,7 @@ Usage:
   pc_monitor status                 Show whether it's running, version and updates
   pc_monitor settings               Open the local settings page in your browser
   pc_monitor pin                    Show the current pairing link and PIN
+  pc_monitor tray                   Show a tray / menu-bar icon (starts the server if needed)
   pc_monitor config list            Show saved settings (also: get <key>, set <key> <value>, path)
   pc_monitor autostart on|off       Start automatically when you log in
   pc_monitor update [--check]       Install the latest release (or just check)
