@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-11-20
+
+### Changed
+- Save settings in `~/.pc_monitor/config.json`; command-line flags now override saved settings and `--save` keeps them ([`d64cc45`](https://github.com/garrettcorn/remote-monitor/commit/d64cc45))
+- Rename the files inside release archives to `pc_monitor`, `pc_monitor.exe` and `pc_monitor-app.exe` ([`b3f5eeb`](https://github.com/garrettcorn/remote-monitor/commit/b3f5eeb))
+- Stop writing `pairing_info.json` and the pairing card to the current folder; pairing info now lives in `~/.pc_monitor` and the card is opt-in with `--export-html` ([`d64cc45`](https://github.com/garrettcorn/remote-monitor/commit/d64cc45))
+
+### Added
+- Add management commands: `start`, `stop`, `restart`, `status`, `pin`, `settings`, `config`, `autostart`, `update` and `version` ([`d64cc45`](https://github.com/garrettcorn/remote-monitor/commit/d64cc45))
+- Add a local settings page with the pairing QR code, PIN, start-at-login, updates and all options ([`d64cc45`](https://github.com/garrettcorn/remote-monitor/commit/d64cc45))
+- Add start at login (per-user, inside the desktop session) on Windows, Linux and macOS ([`d64cc45`](https://github.com/garrettcorn/remote-monitor/commit/d64cc45))
+- Add signed self-updates from GitHub Releases, plus the server version and an update button in the dashboard ([`d64cc45`](https://github.com/garrettcorn/remote-monitor/commit/d64cc45))
+- Add a tray / menu-bar app, including a windowless `pc_monitor-app.exe` on Windows ([`22b5808`](https://github.com/garrettcorn/remote-monitor/commit/22b5808))
+- Add Windows installers, Linux AppImages with zsync updates, `.deb` and `.rpm` packages, and Homebrew, Scoop and winget manifests ([`b3f5eeb`](https://github.com/garrettcorn/remote-monitor/commit/b3f5eeb))
+
 ## [1.5.0] - 2026-11-19
 
 ### Changed
@@ -123,6 +138,8 @@ All notable changes to this project will be documented in this file.
 - Add multi-server fleet management supporting simultaneous monitoring and live server switching in localStorage (#1)
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
+
+[1.6.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.6.0
 
 [1.5.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.5.0
 

@@ -79,6 +79,10 @@ When the server starts, it automatically outputs:
 | **Buttons: open URL / custom launch** | ✅ `ShellExecute` | 🟡 `xdg-open` / direct exec | 🟡 `open` |
 | **Mic mute toggle** | ✅ Core Audio | 🟡 `pactl` | ❌ |
 | **Shutdown / restart** | ✅ `shutdown /s` / `/r` (5 s delay) | 🟡 `systemctl poweroff` / `reboot` | 🟡 AppleScript System Events |
+| **Tray / menu-bar icon** | ✅ `fyne.io/systray` in the windowless `pc_monitor-app.exe` | ✅ `fyne.io/systray` via D-Bus StatusNotifierItem (GNOME needs the AppIndicator extension) | ✅ `fyne.io/systray` (cgo build) |
+| **Start at login** | ✅ per-user `HKCU\…\Run` entry (no admin) | ✅ XDG autostart entry (`~/.config/autostart`) | ✅ LaunchAgent (`~/Library/LaunchAgents`), or `brew services` |
+| **Self-update** | ✅ signed download; renames the running `.exe` aside | ✅ replaces the binary or the AppImage file; also `.zsync` for AppImageUpdate | ✅ signed download, or `brew upgrade` |
+| **Packages** | Inno Setup installer, `.zip`, Scoop | AppImage, `.deb`, `.rpm`, `.tar.gz` | Homebrew, `.tar.gz` |
 | **Sleep** | ✅ `SetSuspendState` (powrprof, with `SeShutdownPrivilege`; sleeps rather than hibernates) | 🟡 `systemctl suspend` | 🟡 `pmset sleepnow` |
 
 The server is a single Go binary with no runtime dependencies on Windows. The Linux/macOS tools above are used only if they're installed; missing ones just leave that panel empty.
@@ -87,36 +91,41 @@ The server is a single Go binary with no runtime dependencies on Windows. The Li
 
 ## 🚀 Quick Start Guide
 
-### Step 1: Run the Server
+### Step 1: Install the Server
 
-#### On Windows:
-```powershell
-# Run with default settings (Tailcat + Direct LAN port 9120)
-.\pc_monitor_server.exe
+Download from the [latest release](https://github.com/garrettcorn/remote-monitor/releases/latest), or use a package manager:
 
-# Or specify a friendly name and your GitHub Pages client URL:
-.\pc_monitor_server.exe -name "GamingPC" -web-url "https://garrettcorn.github.io/remote-monitor/"
-```
+| Platform | Recommended | Alternatives |
+|---|---|---|
+| **Windows** | `pc_monitor_<version>_windows_amd64_setup.exe`: per-user installer, no admin needed. Adds Start-menu shortcuts and an optional "start when I log in" | `scoop bucket add pc-monitor https://github.com/garrettcorn/scoop-bucket` then `scoop install pc-monitor`, or the `.zip` |
+| **Linux** | `pc_monitor-<version>-x86_64.AppImage` (or `-aarch64`): `chmod +x` it and double-click. It updates itself, or use [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate) | `.deb` (`sudo apt install ./pc-monitor_<version>_amd64.deb`), `.rpm`, or the `.tar.gz` |
+| **macOS** | `brew install garrettcorn/tap/pc-monitor` | the `.tar.gz` (Apple Silicon `darwin_arm64`, Intel `darwin_amd64`) |
+| **Android (Termux)** | the `linux_arm64` `.tar.gz` | |
 
-#### On Linux:
-```bash
-chmod +x pc_monitor_linux_amd64
-./pc_monitor_linux_amd64 -name "LinuxServer" -web-url "https://garrettcorn.github.io/remote-monitor/"
-```
+AppImages need FUSE 2 on some distributions (`sudo apt install libfuse2`); otherwise run them with `--appimage-extract-and-run`. Downloaded binaries aren't code-signed, so Windows SmartScreen may say "unrecognized app" (click **More info → Run anyway**), and macOS may block a downloaded binary until you allow it in **System Settings → Privacy & Security**. Homebrew installs avoid the macOS prompt.
 
-#### On macOS:
-```bash
-chmod +x pc_monitor_darwin_arm64
-./pc_monitor_darwin_arm64 -name "MacBookPro" -web-url "https://garrettcorn.github.io/remote-monitor/"
-```
+### Step 1b: Start it
 
-#### On Android (Termux):
-```bash
-pkg install golang git
-# Download or copy pc_monitor_linux_arm64:
-chmod +x pc_monitor_linux_arm64
-./pc_monitor_linux_arm64 -name "AndroidDevice"
-```
+- **Easiest:** open **PC Monitor** from the Start menu or app launcher, or double-click the AppImage. A tray / menu-bar icon appears and the server starts in the background. Choose **Open settings…** to see the pairing QR code and PIN.
+- **From a terminal:** `pc_monitor` runs in the foreground and prints the QR code and PIN. Use `pc_monitor start` to run it in the background instead.
+
+### Managing the server
+
+| Command | What it does |
+|---|---|
+| `pc_monitor settings` | Opens the **local settings page** (only reachable from this computer): pairing QR, PIN, start at login, updates and all options |
+| `pc_monitor start` / `stop` / `restart` / `status` | Control the background server |
+| `pc_monitor pin` | Shows the pairing link, QR code and current PIN |
+| `pc_monitor autostart on` / `off` | Start when you log in (inside your desktop session, so screen, audio and button features work) |
+| `pc_monitor config list` / `set <key> <value>` | View or change saved settings (`~/.pc_monitor/config.json`) |
+| `pc_monitor update` / `update --check` | Install or check for the latest release |
+| `pc_monitor tray` | Show the tray / menu-bar icon |
+
+### Updates
+
+The server checks GitHub for new releases once a day (turn this off in settings). When one is available you can install it from the **settings page**, the **tray menu**, the **dashboard** ("Update to vX" next to the server version, for PIN-paired dashboards) or `pc_monitor update`.
+
+Every release's `checksums.txt` is signed with the project's ed25519 key. The updater only installs a download whose signature verifies against the key built into PC Monitor **and** whose SHA-256 matches. Homebrew and Scoop installs are updated with `brew upgrade` / `scoop update`. Installs from a `.deb` or `.rpm` show where to download the new package.
 
 ---
 
@@ -220,12 +229,15 @@ This repository includes full GitHub Actions workflows configured in `.github/wo
    - Cross-compiles binaries for a matrix of 6 targets: `windows/amd64`, `windows/arm64`, `linux/amd64`, `linux/arm64`, `darwin/arm64`, and `darwin/amd64`.
 2. **`deploy-pages.yml` (GitHub Pages Deployment)**:
    - Automatically builds and deploys the `/web` static dashboard to GitHub Pages upon pushing to `main`.
-3. **`release.yml` (Automated GitHub Releases)**:
-   - Triggered on tag push (`v*`) or manual `workflow_dispatch`.
-   - Extracts release notes directly from `CHANGELOG.md` for that specific version.
-   - Packages binaries into compressed `.zip` and `.tar.gz` archives with `README.md` and `CHANGELOG.md`.
-   - Calculates SHA-256 hashes (`checksums.txt`).
-   - Publishes the GitHub Release with attached assets and release notes.
+3. **`release.yml` (Automated GitHub Releases)**: triggered on tag push (`v*`) or manually (`workflow_dispatch`, with a **dry run** option that builds and signs everything without publishing). All jobs use free GitHub-hosted runners:
+   - **Linux runner:** Windows console + windowless tray app (`.zip`), Linux `.tar.gz`, `.deb` and `.rpm` (amd64/arm64), x86_64 AppImage with zsync update info.
+   - **Linux ARM runner:** aarch64 AppImage.
+   - **macOS runner:** macOS builds with the menu-bar icon (needs cgo).
+   - **Windows runner:** per-user Inno Setup installers.
+   - **Publish:** stamps the version into every build, writes `checksums.txt`, signs it with the `UPDATE_SIGNING_KEY` secret (`checksums.txt.sig`; the release fails without it), renders Homebrew/Scoop/winget manifests, attaches `winget_manifests_<version>.zip`, and publishes the release with notes from `CHANGELOG.md`.
+   - **Package managers:** if a `PACKAGES_TOKEN` secret exists, the [Homebrew tap](https://github.com/garrettcorn/homebrew-tap) and [Scoop bucket](https://github.com/garrettcorn/scoop-bucket) are updated automatically. Create a free fine-grained personal access token with **Contents: Read and write** on those two repositories and save it as the `PACKAGES_TOKEN` Actions secret. winget manifests are attached for manual submission to `microsoft/winget-pkgs`.
+
+**Signing keys:** generate a key pair with `go run ./cmd/signtool genkey`, store the private key as the `UPDATE_SIGNING_KEY` secret and put the public key in `pkg/update/update.go`. Keep a private backup of the private key: if it's lost, installed copies can't verify updates signed with a new key until they're updated manually.
 
 ---
 
@@ -295,15 +307,20 @@ The script validates the changelog, runs tests, creates the Git tag `v1.1.0`, an
 
 ## 🛠️ CLI Flags Reference
 
+Flags apply to `pc_monitor run` (the default command). They override the saved settings in `~/.pc_monitor/config.json`; add `--save` to keep them.
+
 | Flag | Default | Description |
 | :--- | :--- | :--- |
 | `-name` | Hostname | Friendly nickname for this server displayed in the client |
 | `-port` | `9120` | Direct HTTP/WebSocket port for LAN or Tailscale IP connections (set `0` to disable) |
 | `-tc-port` | `8080` | TCP port inside the Tailcat WireGuard tunnel |
-| `-web-url` | `https://your-username.github.io/pc_monitor/` | Base URL of your deployed GitHub Pages client |
+| `-web-url` | `https://garrettcorn.github.io/remote-monitor/` | Base URL of the dashboard used in pairing links |
+| `-settings-port` | `9121` | Port of the local settings page (bound to 127.0.0.1 only) |
 | `-token` | *(saved)* | Custom pairing token. If omitted, a random 32-character hex token is created once and reused from `~/.pc_monitor/pairing_token` |
 | `-no-tailcat`| `false` | Run in direct LAN / Tailscale IP mode only without Tailcat |
-| `-export-html`| `pairing_card.html`| Path to write a standalone HTML card with SVG QR code |
+| `-export-html`| *(off)* | Also write a standalone HTML pairing card with the QR code to this file |
+| `-background` | `false` | No console output; log to `~/.pc_monitor/server.log` (used by `start`, the tray and start-at-login) |
+| `-save` | `false` | Save the given flags as the new defaults |
 | `-read-only` | `false` | Monitoring only: disable remote control (audio, shutdown/restart); dashboards connect without a PIN |
 | `-reset-pairing` | `false` | Revoke all paired dashboards: new pairing token and cleared PIN sessions |
 | `-no-screen` | `false` | Disable screen capture previews (displays are still listed) |
@@ -363,5 +380,7 @@ pc_monitor/
 - **Private by Default**: Storage credentials remain strictly in your browser's local `localStorage`.
 - **PIN-Gated Control**: When remote control is enabled, telemetry and control both require a session that is only issued in exchange for a one-time PIN shown on the server console. Five wrong guesses replace the PIN, so a stolen pairing link alone cannot connect or power the machine off. Use `-read-only` to remove control entirely. Treat paired dashboards as fully trusted: keyboard-shortcut buttons can type on the host.
 - **Plain HTTP on the LAN port**: The direct port (`-port`, default `9120`) is unencrypted HTTP. Prefer Tailscale/Tailcat or a trusted network when control is enabled.
+- **Local settings page**: served only on `127.0.0.1`, rejects requests whose `Host` isn't localhost (DNS-rebinding protection), and every action needs the key in `~/.pc_monitor/settings_key` (owner-only). `pc_monitor settings` and the tray pass the key in the URL fragment, which browsers never send to servers.
+- **Signed updates**: the self-updater installs a release only if `checksums.txt.sig` verifies against the ed25519 public key compiled into PC Monitor and the download's SHA-256 matches.
 - **Screen previews are sensitive**: they're only served to PIN-paired dashboards, never in `-read-only` mode, and are only captured on request or while auto-refresh is on. Use `-no-screen` to turn them off.
 - **SMART details need elevation**: Drive health status works for any user; temperature, wear and error counters require running the server as administrator (Windows) or root with `smartctl` (Linux).

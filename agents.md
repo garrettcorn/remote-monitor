@@ -129,8 +129,10 @@ All released tags have 7 release assets.
 - **Has failed transiently once** with "No artifacts named github-pages were found" (GitHub-side). Fix: `gh run rerun <id>`. After any web change, confirm the live site serves the new `?v=N` (e.g. `curl -s https://garrettcorn.github.io/remote-monitor/ | grep app.js`).
 
 ### `release.yml` (push of a `v*` tag, or `workflow_dispatch`)
-- Validate CHANGELOG → extract notes for `${TAG#v}` → cross-compile → package → checksums → publish
-- Assets: `pc_monitor_<ver>_{windows_amd64,windows_arm64}.zip`, `pc_monitor_<ver>_{linux,darwin}_{amd64,arm64}.tar.gz`, `checksums.txt` (binaries inside are named `pc_monitor_<os>_<arch>[.exe]`)
+Six jobs, all free hosted runners: `prepare` (changelog validate/extract) → `build` (ubuntu: Windows console + `-H windowsgui` app exe, Linux tarballs, `.deb`/`.rpm` via `scripts/package_linux.sh`, x86_64 AppImage) ∥ `appimage-arm` (`ubuntu-24.04-arm`) ∥ `macos` (cgo, `CC="clang -arch …"`) → `windows-installer` (Inno Setup via choco) → `publish` (sha256 → `checksums.txt`, sign with `UPDATE_SIGNING_KEY` → `checksums.txt.sig`, render manifests, release, optional tap/bucket push).
+- **Dry run:** `gh workflow run release.yml --ref <branch> -f tag=vX.Y.Z -f dry_run=true` builds/packages/signs from the branch HEAD without publishing (artifact `dry-run-release`). Use it before tagging when the pipeline changes.
+- Assets (1.6.0+): `pc_monitor_<ver>_windows_{amd64,arm64}.zip` (contains `pc_monitor.exe`, `pc_monitor-app.exe`), `…_windows_{amd64,arm64}_setup.exe`, `pc_monitor_<ver>_{linux,darwin}_{amd64,arm64}.tar.gz` (contains `pc_monitor`), `pc-monitor_<ver>_{amd64,arm64}.deb`, `pc-monitor-<ver>-1.{x86_64,aarch64}.rpm`, `pc_monitor-<ver>-{x86_64,aarch64}.AppImage(.zsync)`, `winget_manifests_<ver>.zip`, `checksums.txt`, `checksums.txt.sig`. **The updater depends on these names** (`pkg/update.assetName`/`replacements`).
+- Secrets: `UPDATE_SIGNING_KEY` (base64 ed25519 seed; set; private backup at `~/.pc_monitor-release/` on the dev machine, never in the repo). `PACKAGES_TOKEN` (optional fine-grained PAT, contents:write on `garrettcorn/homebrew-tap` + `garrettcorn/scoop-bucket`). Without it, update those repos by hand from the rendered `packages/` output.
 
 ---
 
@@ -273,6 +275,13 @@ PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 
 
 ---
 
+### Management, settings page & updates (1.6.0+)
+- `cmd/server` is now `main.go` (subcommand dispatch; no command = `run`, so old flag-only usage still works), `run.go` (server; config + flag overrides; `--background` logs to `~/.pc_monitor/server.log`; single-instance via settings-port ping; `stop(restart)` closes listeners then `service.StartDetached()`), `cli.go` (start/stop/status/pin/config/autostart/update), `settings.go` + embedded `settings.html` (local page), `tray.go` (systray client of the settings API; `tray_stub.go` when cgo is off on macOS).
+- `pkg/config` (`~/.pc_monitor/config.json`, BOM-tolerant), `pkg/service` (detached start, OpenBrowser, autostart: HKCU Run / XDG autostart / LaunchAgent; `LoginArgs` = `tray` when built in), `pkg/update` (GitHub latest release, install-method detection, signed checksum verification, Windows rename-aside swap of both exes, AppImage replacement), `pkg/buildinfo` (`Version` via `-X`, `Newer`), `pkg/icon` (icon drawn in code; multi-size ICO), `cmd/signtool`, `cmd/pkgtool`.
+- Settings API (127.0.0.1:`settings_port`, default 9121): `/api/ping` (open), everything else needs `X-Settings-Key` from `~/.pc_monitor/settings_key`; non-localhost `Host` → 403. CLI/tray use it to talk to the running server.
+- Windows ships two exes from one source: `pc_monitor.exe` (console CLI) and `pc_monitor-app.exe` (`-H windowsgui -X main.guiBuild=1`; no args → tray). Start-at-login points at the app exe so no console flashes.
+- Start-at-login runs in the user's session on purpose (screen/audio/input need it); never convert it to a system service.
+
 ## Outstanding Items / Ideas
 
 | Item | Detail |
@@ -293,6 +302,9 @@ PowerShell sources are slow (~1–4 s) and run in a background refresh every 30 
 
 | Gotcha | Detail |
 |---|---|
+| `go get` can downgrade tailscale | `go get fyne.io/systray@v1.11.0` once removed tailcat and downgraded tailscale. Back up `go.mod`/`go.sum` first and add deps at the version the graph already selects; check `git diff go.mod` afterwards |
+| Testing autostart | Don't enable start-at-login on the dev machine (writes the real HKCU Run key). Unix autostart is unit-tested in a temp HOME; Windows test only checks the command string |
+| Testing the server CLI | Point `USERPROFILE`/`HOME` at a scratch folder and use spare ports (`config set port …`, `settings_port …`) so the real `~/.pc_monitor` isn't touched |
 | JS written via shell heredocs | Backslashes in regexes/strings can get mangled (a broken regex in `panel.js` once stopped the whole app). Prefer string ops over regex for paths, and always load the page and check the console |
 | BOM in JSON config | PowerShell `Set-Content -Encoding utf8` and some editors add a UTF-8 BOM; `deck.LoadLaunchActions` strips it. Do the same for any new config file |
 | `SendInput` struct | `INPUT` must be 40 bytes on 64-bit (union sized by `MOUSEINPUT`); `deck_test.go` guards the layout |
