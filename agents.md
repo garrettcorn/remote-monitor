@@ -1,6 +1,6 @@
 # Agent Handoff: Remote Monitor
 
-> Last updated: 2026-11-20 (release **v1.7.0**)  
+> Last updated: 2026-11-20 (release **v1.7.1**)  
 > Repo: https://github.com/garrettcorn/remote-monitor  
 > Pages: https://garrettcorn.github.io/remote-monitor/  
 > Local workspace: `c:\Users\jon\workspace\pc_monitor\`
@@ -116,6 +116,7 @@ No new third-party Go dependencies were added for audio/SMART/devices: Windows u
 | `v1.5.0` | Button editor tabs (App, Shortcut, Media & system, Text, Website), installed-app picker, shortcut library, text snippets, Lock/Sleep, custom colour wheel |
 | `v1.6.0` | Saved config, management CLI, local settings page, start at login, signed self-update, tray app, installers/AppImage/deb/rpm/Homebrew/Scoop/winget packaging |
 | `v1.7.0` | Displays remote control (`/api/display/input`) and capture saving; automatic updates (`auto_update`, off by default) and dashboard Check for updates; "Stream Deck" wording removed |
+| `v1.7.1` | Full screen screen viewer (Keyboard Lock while controlling); viewer no longer capped at 480 px |
 
 All released tags have 7 release assets.
 

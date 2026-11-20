@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.1] - 2026-11-20
+
+### Added
+- Add a full screen mode to the screen viewer with the Remote control switch, sharper live frames and, in Chrome and Edge, capture of keys like Esc and Alt+Tab ([`7a40eeb`](https://github.com/garrettcorn/remote-monitor/commit/7a40eeb))
+
+### Fixed
+- Fix the screen viewer being limited to 480 px wide ([`7a40eeb`](https://github.com/garrettcorn/remote-monitor/commit/7a40eeb))
+
 ## [1.7.0] - 2026-11-20
 
 ### Changed
@@ -152,6 +160,7 @@ All notable changes to this project will be documented in this file.
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
 
+[1.7.1]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.1
 [1.7.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.0
 [1.6.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.6.0
 
