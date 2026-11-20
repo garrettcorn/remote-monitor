@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.1] - 2026-11-20
+
+### Changed
+- Show the operating system's full name on the dashboard without the "windows" prefix, and its short name in the fleet overview ([`b77f644`](https://github.com/garrettcorn/remote-monitor/commit/b77f644))
+
+### Fixed
+- Fix Windows 11 being reported as Windows 10 ([`b77f644`](https://github.com/garrettcorn/remote-monitor/commit/b77f644))
+
 ## [1.8.0] - 2026-11-20
 
 ### Changed
@@ -193,6 +201,7 @@ All notable changes to this project will be documented in this file.
 - Add in-browser camera QR code scanner with BarcodeDetector API for instant mobile/webcam pairing (#1)
 - Add dual connection mode with direct WebSocket and HTTP polling fallback (#1)
 
+[1.8.1]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.8.1
 [1.8.0]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.8.0
 [1.7.3]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.3
 [1.7.2]: https://github.com/garrettcorn/remote-monitor/releases/tag/v1.7.2
